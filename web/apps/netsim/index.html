@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Network Simulator &middot; FoCT Virtual Labs</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png">
+<link rel="stylesheet" href="/assets/css/foct.css">
+<link rel="stylesheet" href="netsim.css">
+<script type="module" src="/assets/js/foct.js"></script>
+</head>
+<body>
+<header class="foct-bar">
+  <a class="foct-home" href="/" title="Back to FoCT Virtual Labs">
+    <img src="/assets/brand/adtu-seal.png" alt="ADtU seal">
+    <span><span class="t1">FoCT Virtual Labs</span><span class="t2">Assam down town University</span></span>
+  </a>
+  <span class="foct-crumb">/</span>
+  <span class="foct-app-title">Network Simulator</span>
+  <div class="tb">
+    <button class="btn btn-ghost" id="btnNew" title="New network">New</button>
+    <button class="btn btn-ghost" id="btnOpen" title="Open a .foctnet file from this computer (Ctrl+O)">Open</button>
+    <button class="btn btn-ghost" id="btnSave" title="Save to this computer (Ctrl+S)">Save</button>
+    <div class="menu-wrap">
+      <button class="btn btn-ghost" id="btnMore" aria-haspopup="true">Examples &amp; more &#9662;</button>
+      <div class="menu" id="menu" hidden>
+        <div class="menu-label">Example networks</div>
+        <div id="examples"></div>
+        <hr>
+        <button data-cmd="png">Export picture (.png)</button>
+        <button data-cmd="help">How to use the simulator</button>
+        <button data-cmd="theme">Switch light / dark</button>
+      </div>
+    </div>
+  </div>
+  <span class="spacer"></span>
+  <div class="simbar" role="group" aria-label="Simulation controls">
+    <button class="btn btn-sm" id="btnPlay" title="Pause / resume the simulation (Space)">&#10073;&#10073; Pause</button>
+    <button class="btn btn-sm" id="btnStep" title="Advance one step (when paused)">Step &#9655;|</button>
+    <label class="speed" title="Animation speed">Speed
+      <select id="speed">
+        <option value="1">Slow</option>
+        <option value="3" selected>Normal</option>
+        <option value="10">Fast</option>
+        <option value="1000">Instant</option>
+      </select>
+    </label>
+    <button class="btn btn-sm" id="btnReset" title="Clear ARP caches, MAC tables and packets in flight">Reset</button>
+  </div>
+</header>
+
+<div class="ns">
+  <aside class="palette" aria-label="Tools and devices">
+    <div class="pal-group">
+      <button class="tool active" data-tool="select" title="Select and move (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z" fill="currentColor"/></svg><span>Select</span></button>
+      <button class="tool" data-tool="cable" title="Connect devices with a cable (C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20c4-1 4-7 8-8s4-7 8-8"/><circle cx="4" cy="20" r="2" fill="currentColor"/><circle cx="20" cy="4" r="2" fill="currentColor"/></svg><span>Cable</span></button>
+      <button class="tool" data-tool="ping" title="Quick ping: click a source, then a destination (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>Ping</span></button>
+      <button class="tool" data-tool="delete" title="Delete a device or cable (Del)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span>Delete</span></button>
+    </div>
+    <div class="pal-label">Add a device</div>
+    <div class="pal-group" id="devicePalette"></div>
+    <p class="pal-hint" id="toolHint">Click a device type, then click the workspace to place it.</p>
+  </aside>
+
+  <main class="stage" id="stage">
+    <svg id="canvas" class="canvas" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" class="grid-dot"/></pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#grid)" class="grid-bg"/>
+      <g id="links"></g>
+      <g id="devices"></g>
+      <g id="packets"></g>
+      <line id="rubber" class="rubber" hidden/>
+    </svg>
+    <div class="empty" id="empty">
+      <h2>Build a network</h2>
+      <p>Add PCs, switches and routers from the left, connect them with the <b>Cable</b> tool, give the hosts IP addresses, then open a PC&rsquo;s <b>Terminal</b> and type <code>ping</code>.</p>
+      <p>Or start from <a href="#" id="loadExample">an example network</a>.</p>
+    </div>
+    <div class="clock" id="clock" title="Simulation time (one tick = one cable hop)">t = 0</div>
+  </main>
+
+  <aside class="inspector" id="inspector">
+    <div class="insp-tabs" role="tablist">
+      <button class="itab active" data-tab="config" role="tab">Configure</button>
+      <button class="itab" data-tab="terminal" role="tab">Terminal</button>
+      <button class="itab" data-tab="tables" role="tab">Tables</button>
+    </div>
+    <div class="insp-body">
+      <section data-tab="config" id="configPane"></section>
+      <section data-tab="terminal" id="terminalPane" hidden>
+        <pre class="term" id="term" tabindex="0"></pre>
+        <form class="term-in" id="termForm" autocomplete="off">
+          <span id="termPrompt">&gt;</span>
+          <input id="termInput" spellcheck="false" aria-label="Command">
+        </form>
+      </section>
+      <section data-tab="tables" id="tablesPane" hidden></section>
+    </div>
+    <div class="problems" id="problems" hidden></div>
+  </aside>
+</div>
+
+<section class="events" id="events">
+  <div class="ev-head">
+    <strong>Packets</strong>
+    <label><input type="checkbox" id="fArp" checked> ARP</label>
+    <label><input type="checkbox" id="fIcmp" checked> ICMP</label>
+    <span class="spacer"></span>
+    <button class="btn btn-ghost btn-sm" id="btnClearEv">Clear</button>
+    <button class="btn btn-ghost btn-sm" id="btnToggleEv" title="Show / hide the packet list">&#9662;</button>
+  </div>
+  <div class="ev-body">
+    <div class="ev-list" id="evList" role="listbox" aria-label="Packets sent"></div>
+    <div class="ev-detail" id="evDetail"><p class="muted">Click a packet to see its headers.</p></div>
+  </div>
+</section>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

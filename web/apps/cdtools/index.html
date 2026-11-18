@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compiler Design Tools &middot; FoCT Virtual Labs</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png">
+<link rel="stylesheet" href="/assets/css/foct.css">
+<link rel="stylesheet" href="cdtools.css">
+<script type="module" src="/assets/js/foct.js"></script>
+</head>
+<body>
+<header class="foct-bar">
+  <a class="foct-home" href="/" title="Back to FoCT Virtual Labs">
+    <img src="/assets/brand/adtu-seal.png" alt="ADtU seal">
+    <span><span class="t1">FoCT Virtual Labs</span><span class="t2">Assam down town University</span></span>
+  </a>
+  <span class="foct-crumb">/</span>
+  <span class="foct-app-title">Compiler Design Tools</span>
+  <span class="spacer"></span>
+  <a class="btn btn-ghost" href="/apps/code/?lang=lex" title="Write and run lex and yacc programs">Lex &amp; Yacc lab</a>
+  <button class="btn btn-ghost" id="btnHelp">Help</button>
+  <button class="btn btn-ghost" id="btnTheme" title="Switch light / dark" aria-label="Switch light / dark theme">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
+</header>
+
+<nav class="cd-tabs" role="tablist">
+  <button class="cd-tab active" data-tab="grammar" role="tab">FIRST, FOLLOW &amp; LL(1)</button>
+  <button class="cd-tab" data-tab="op" role="tab">Operator precedence</button>
+  <button class="cd-tab" data-tab="lr" role="tab">LR parsing (SLR, LALR, CLR)</button>
+  <button class="cd-tab" data-tab="regex" role="tab">Regex &rarr; NFA &rarr; DFA</button>
+  <button class="cd-tab" data-tab="icg" role="tab">Intermediate code</button>
+</nav>
+
+<main class="cd-main">
+  <!-- FIRST / FOLLOW / LL(1) -->
+  <section class="panel" data-panel="grammar">
+    <div class="side">
+      <label class="lbl" for="gExample">Example</label>
+      <select id="gExample" class="ex"></select>
+      <label class="lbl" for="gText">Grammar <small>one rule per line: <code>A -&gt; &alpha; | &beta;</code>, &epsilon; as <code>ε</code>, <code>#</code> or empty</small></label>
+      <textarea id="gText" class="code" rows="9" spellcheck="false"></textarea>
+      <label class="lbl" for="gMode">Symbols</label>
+      <select id="gMode">
+        <option value="auto">Detect automatically</option>
+        <option value="spaced">Separated by spaces (E + T)</option>
+        <option value="compact">One character each (E+T, with E' id num)</option>
+      </select>
+      <div class="row">
+        <button class="btn btn-primary" id="gGo">Analyse</button>
+        <button class="btn" id="gLeftRec" title="Eliminate left recursion">Remove left recursion</button>
+        <button class="btn" id="gFactor" title="Left factor the grammar">Left factor</button>
+      </div>
+      <label class="lbl" for="gInput">Input string to parse</label>
+      <div class="row">
+        <input type="text" id="gInput" class="code" spellcheck="false">
+        <button class="btn btn-primary" id="gParse">Parse (LL(1))</button>
+      </div>
+    </div>
+    <div class="out" id="gOut" aria-live="polite"></div>
+  </section>
+
+  <!-- operator precedence -->
+  <section class="panel" data-panel="op" hidden>
+    <div class="side">
+      <label class="lbl" for="oExample">Example</label>
+      <select id="oExample" class="ex"></select>
+      <label class="lbl" for="oText">Operator grammar <small>no ε-productions and no two non-terminals side by side</small></label>
+      <textarea id="oText" class="code" rows="8" spellcheck="false"></textarea>
+      <div class="row"><button class="btn btn-primary" id="oGo">Build the precedence table</button></div>
+      <label class="lbl" for="oInput">Input string to parse</label>
+      <div class="row">
+        <input type="text" id="oInput" class="code" spellcheck="false">
+        <button class="btn btn-primary" id="oParse">Parse</button>
+      </div>
+    </div>
+    <div class="out" id="oOut" aria-live="polite"></div>
+  </section>
+
+  <!-- LR -->
+  <section class="panel" data-panel="lr" hidden>
+    <div class="side">
+      <label class="lbl" for="lExample">Example</label>
+      <select id="lExample" class="ex"></select>
+      <label class="lbl" for="lText">Grammar</label>
+      <textarea id="lText" class="code" rows="9" spellcheck="false"></textarea>
+      <label class="lbl" for="lMethod">Method</label>
+      <select id="lMethod">
+        <option value="lr0">LR(0)</option>
+        <option value="slr" selected>SLR(1)</option>
+        <option value="lalr">LALR(1)</option>
+        <option value="clr">Canonical LR(1) (CLR)</option>
+      </select>
+      <div class="row"><button class="btn btn-primary" id="lGo">Build the parsing table</button></div>
+      <label class="lbl" for="lInput">Input string to parse</label>
+      <div class="row">
+        <input type="text" id="lInput" class="code" spellcheck="false">
+        <button class="btn btn-primary" id="lParse">Parse</button>
+      </div>
+    </div>
+    <div class="out" id="lOut" aria-live="polite"></div>
+  </section>
+
+  <!-- regex -->
+  <section class="panel" data-panel="regex" hidden>
+    <div class="side">
+      <label class="lbl" for="rExample">Example</label>
+      <select id="rExample" class="ex"></select>
+      <label class="lbl" for="rText">Regular expression <small><code>|</code> or, <code>*</code> <code>+</code> <code>?</code>, <code>( )</code>, <code>ε</code>, <code>[a-z]</code></small></label>
+      <input type="text" id="rText" class="code" spellcheck="false">
+      <label class="chk"><input type="checkbox" id="rPlus"> <span><code>+</code> means &ldquo;or&rdquo; (textbook style: <code>(a+b)*abb</code>)</span></label>
+      <div class="row"><button class="btn btn-primary" id="rGo">Build the automata</button></div>
+      <label class="lbl" for="rInput">Test a string</label>
+      <div class="row">
+        <input type="text" id="rInput" class="code" spellcheck="false" placeholder="e.g. aabb">
+        <button class="btn btn-primary" id="rTest">Test</button>
+      </div>
+      <div id="rTestOut" class="test-out"></div>
+    </div>
+    <div class="out" id="rOut" aria-live="polite"></div>
+  </section>
+
+  <!-- intermediate code -->
+  <section class="panel" data-panel="icg" hidden>
+    <div class="side">
+      <label class="lbl" for="iExample">Example</label>
+      <select id="iExample" class="ex"></select>
+      <label class="lbl" for="iText">Statements <small>one assignment per line, e.g. <code>a = b * -c + b * -c</code></small></label>
+      <textarea id="iText" class="code" rows="7" spellcheck="false"></textarea>
+      <div class="row"><button class="btn btn-primary" id="iGo">Generate</button></div>
+    </div>
+    <div class="out" id="iOut" aria-live="polite"></div>
+  </section>
+</main>
+
+<script type="module" src="cdtools.js"></script>
+</body>
+</html>

@@ -1,0 +1,398 @@
+#!/usr/bin/env python3
+"""
+FoCT Virtual Labs - LAN web server.
+
+Serves the ./web folder to every PC on the lab network. All compiling and
+running happens inside each student's browser, so the server only sends
+files: it never receives, runs or stores student work.
+
+    python server/serve.py                 # http://<this-pc>:8080
+    python server/serve.py --port 80
+    python server/serve.py --https         # also https://<this-pc>:8443 (see README)
+
+Only the Python 3.8+ standard library is needed.
+"""
+import argparse
+import datetime
+import email.utils
+import http.server
+import json
+import os
+import posixpath
+import socket
+import ssl
+import sys
+import threading
+import time
+import urllib.parse
+from pathlib import Path
+
+VERSION = "1.0.0"
+ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_WEB = ROOT / "web"
+CERT_DIR = Path(__file__).resolve().parent / "certs"
+
+MIME = {
+    ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
+    ".map": "application/json; charset=utf-8", ".txt": "text/plain; charset=utf-8",
+    ".md": "text/markdown; charset=utf-8", ".xml": "application/xml; charset=utf-8",
+    ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".gif": "image/gif", ".webp": "image/webp", ".ico": "image/x-icon", ".bmp": "image/bmp",
+    ".wasm": "application/wasm", ".woff": "font/woff", ".woff2": "font/woff2",
+    ".ttf": "font/ttf", ".otf": "font/otf", ".eot": "application/vnd.ms-fontobject",
+    ".zip": "application/zip", ".whl": "application/zip", ".tar": "application/x-tar",
+    ".gz": "application/gzip", ".bin": "application/octet-stream", ".data": "application/octet-stream",
+    ".pdf": "application/pdf", ".ipynb": "application/json; charset=utf-8",
+    ".py": "text/x-python; charset=utf-8", ".c": "text/plain; charset=utf-8",
+    ".cpp": "text/plain; charset=utf-8", ".h": "text/plain; charset=utf-8",
+    ".java": "text/plain; charset=utf-8", ".crt": "application/x-x509-ca-cert",
+    ".cer": "application/x-x509-ca-cert", ".webmanifest": "application/manifest+json",
+    ".mp4": "video/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".csv": "text/csv; charset=utf-8",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+}
+
+# Apps that load third-party pages/frames and must not be cross-origin isolated.
+NOT_ISOLATED = ("/apps/drawio/", "/apps/office/")
+
+
+class Stats:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.started = time.time()
+        self.requests = 0
+        self.bytes = 0
+        self.clients = {}
+
+    def add(self, ip, nbytes):
+        with self.lock:
+            self.requests += 1
+            self.bytes += nbytes
+            self.clients[ip] = time.time()
+
+    def snapshot(self):
+        with self.lock:
+            now = time.time()
+            active = sum(1 for t in self.clients.values() if now - t < 300)
+            return {"requests": self.requests, "mb_sent": round(self.bytes / 1e6, 1),
+                    "active_pcs_5min": active, "pcs_seen": len(self.clients),
+                    "uptime_min": round((now - self.started) / 60, 1)}
+
+
+STATS = Stats()
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    server_version = "FoCT-Virtual-Labs/" + VERSION
+    sys_version = ""
+    timeout = 120
+    web_root = DEFAULT_WEB
+    verbose = False
+    info = {}
+
+    # ------------------------------------------------------------ routing
+    def do_GET(self):
+        self.handle_request(head=False)
+
+    def do_HEAD(self):
+        self.handle_request(head=True)
+
+    def do_POST(self):
+        self.send_simple(405, "This server does not accept uploads. Your files stay on your computer.")
+
+    do_PUT = do_DELETE = do_PATCH = do_POST
+
+    def handle_request(self, head):
+        url = urllib.parse.urlsplit(self.path)
+        path = urllib.parse.unquote(url.path)
+        if path == "/__status":
+            body = json.dumps(dict(self.info, **STATS.snapshot(), version=VERSION,
+                                   secure=isinstance(self.connection, ssl.SSLSocket)), indent=1)
+            return self.send_simple(200, body, "application/json; charset=utf-8", head=head)
+        target = self.resolve(path)
+        if target is None:
+            return self.send_simple(404, "Not found", head=head, page=True)
+        if target.is_dir():
+            if not path.endswith("/"):
+                loc = path + "/" + (("?" + url.query) if url.query else "")
+                self.send_response(301)
+                self.send_header("Location", urllib.parse.quote(loc, safe="/?=&%:"))
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            target = target / "index.html"
+            if not target.is_file():
+                return self.send_simple(404, "Not found", head=head, page=True)
+        self.send_file(target, path, head)
+
+    def resolve(self, path):
+        norm = posixpath.normpath(path)
+        parts = [p for p in norm.split("/") if p and p not in (".", "..")]
+        if any(p.startswith(".") and p not in (".well-known",) for p in parts):
+            return None  # hide .foct-version, .git and friends
+        target = self.web_root.joinpath(*parts)
+        try:
+            target.resolve().relative_to(self.web_root.resolve())
+        except ValueError:
+            return None
+        return target if target.exists() else None
+
+    # ------------------------------------------------------------ sending
+    def common_headers(self, path):
+        self.send_header("X-Content-Type-Options", "nosniff")
+        if not path.startswith(NOT_ISOLATED):
+            # Lets the IDEs use SharedArrayBuffer (interactive input) when served over HTTPS.
+            self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+            self.send_header("Cross-Origin-Embedder-Policy", "credentialless")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+
+    def send_file(self, target, path, head):
+        ctype = MIME.get(target.suffix.lower(), "application/octet-stream")
+        encoding, send_path = None, target
+        accept = self.headers.get("Accept-Encoding", "")
+        try:
+            st = target.stat()
+            for enc, ext in (("br", ".br"), ("gzip", ".gz")):
+                if enc in accept:
+                    cand = target.with_name(target.name + ext)
+                    if cand.is_file() and cand.stat().st_mtime >= st.st_mtime - 1:
+                        encoding, send_path = enc, cand
+                        break
+            sst = send_path.stat()
+        except OSError:
+            return self.send_simple(404, "Not found", head=head, page=True)
+
+        etag = f'W/"{int(st.st_mtime)}-{st.st_size}-{encoding or "id"}"'
+        last_mod = email.utils.formatdate(st.st_mtime, usegmt=True)
+        if self.not_modified(etag, st.st_mtime):
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.common_headers(path)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            STATS.add(self.client_address[0], 0)
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(sst.st_size))
+        self.send_header("Last-Modified", last_mod)
+        self.send_header("ETag", etag)
+        self.send_header("Vary", "Accept-Encoding")
+        if encoding:
+            self.send_header("Content-Encoding", encoding)
+        # Always revalidate (a cheap 304 on the LAN), so updated runtimes are never mixed with stale ones.
+        self.send_header("Cache-Control", "no-cache")
+        if target.suffix.lower() in (".crt", ".cer"):
+            self.send_header("Content-Disposition", f'attachment; filename="{target.name}"')
+        self.common_headers(path)
+        self.end_headers()
+        sent = 0
+        if not head:
+            try:
+                with open(send_path, "rb") as f:
+                    while True:
+                        chunk = f.read(256 * 1024)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        sent += len(chunk)
+            except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, socket.timeout):
+                self.close_connection = True
+        STATS.add(self.client_address[0], sent)
+
+    def not_modified(self, etag, mtime):
+        inm = self.headers.get("If-None-Match")
+        if inm:
+            return etag in [t.strip() for t in inm.split(",")] or inm.strip() == "*"
+        ims = self.headers.get("If-Modified-Since")
+        if ims:
+            try:
+                since = email.utils.parsedate_to_datetime(ims)
+                if since.tzinfo is None:
+                    since = since.replace(tzinfo=datetime.timezone.utc)
+                return int(mtime) <= since.timestamp()
+            except (TypeError, ValueError, IndexError, OverflowError):
+                return False
+        return False
+
+    def send_simple(self, code, text, ctype="text/plain; charset=utf-8", head=False, page=False):
+        if page:
+            ctype = "text/html; charset=utf-8"
+            text = ("<!doctype html><meta charset=utf-8><title>%d</title>"
+                    "<body style='font:16px system-ui;margin:3rem;color:#352f6e'>"
+                    "<h1>%d &middot; %s</h1><p><a href='/'>Back to FoCT Virtual Labs</a></p>"
+                    % (code, code, text))
+        body = text.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.common_headers(urllib.parse.urlsplit(self.path).path)
+        self.end_headers()
+        if not head:
+            self.wfile.write(body)
+        STATS.add(self.client_address[0], len(body))
+
+    # ------------------------------------------------------------ logging
+    def log_request(self, code="-", size="-"):
+        try:
+            code = int(code)
+        except (TypeError, ValueError):
+            code = 0
+        if self.verbose or code >= 400:
+            super().log_request(code, size)
+
+    def log_message(self, fmt, *args):
+        sys.stderr.write("%s  %s  %s\n" % (time.strftime("%H:%M:%S"), self.client_address[0], fmt % args))
+
+
+class LabServer(http.server.ThreadingHTTPServer):
+    daemon_threads = True
+    request_queue_size = 256
+    allow_reuse_address = True
+
+    def handle_error(self, request, client_address):
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError,
+                            socket.timeout, ssl.SSLError, TimeoutError)):
+            return  # a browser tab was closed mid-download; nothing to report
+        super().handle_error(request, client_address)
+
+
+class TLSLabServer(LabServer):
+    """HTTPS variant: the TLS handshake runs in the per-connection thread."""
+
+    def __init__(self, addr, handler, ctx):
+        super().__init__(addr, handler)
+        self.ctx = ctx
+
+    def finish_request(self, request, client_address):
+        request.settimeout(30)
+        try:
+            tls = self.ctx.wrap_socket(request, server_side=True)
+        except (ssl.SSLError, OSError):
+            return  # e.g. a PC that has not trusted the lab certificate yet
+        try:
+            self.RequestHandlerClass(tls, client_address, self)
+        finally:
+            try:
+                tls.close()
+            except OSError:
+                pass
+
+
+def lan_addresses():
+    ips = []
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("10.255.255.255", 1))  # no packet is sent; picks the LAN interface
+        ips.append(s.getsockname()[0])
+        s.close()
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if ip not in ips:
+                ips.append(ip)
+    except OSError:
+        pass
+    return [ip for ip in ips if not ip.startswith("127.") and not ip.startswith("169.254.")]
+
+
+def start(server, name):
+    t = threading.Thread(target=server.serve_forever, name=name, daemon=True)
+    t.start()
+    return t
+
+
+def main():
+    ap = argparse.ArgumentParser(description="FoCT Virtual Labs LAN server")
+    ap.add_argument("--host", default="0.0.0.0", help="address to listen on (default: all)")
+    ap.add_argument("--port", type=int, default=int(os.environ.get("FOCT_PORT", 8080)))
+    ap.add_argument("--https", action="store_true", help="also serve HTTPS (creates a lab certificate)")
+    ap.add_argument("--https-port", type=int, default=int(os.environ.get("FOCT_HTTPS_PORT", 8443)))
+    ap.add_argument("--cert", help="use your own certificate (PEM) instead of the lab one")
+    ap.add_argument("--key", help="private key (PEM) for --cert")
+    ap.add_argument("--root", default=str(DEFAULT_WEB), help="folder to serve")
+    ap.add_argument("--verbose", action="store_true", help="log every request")
+    args = ap.parse_args()
+
+    web_root = Path(args.root).resolve()
+    if not (web_root / "index.html").is_file():
+        sys.exit(f"Cannot find {web_root / 'index.html'}")
+    missing = [n for n in ("runtimes/pyodide", "runtimes/clang", "vendor/monaco")
+               if not (web_root / n).is_dir()]
+    if missing:
+        print("WARNING: some runtimes are missing (%s).\n"
+              "         Run  python tools/setup.py  once, with internet, to install them.\n" % ", ".join(missing))
+
+    Handler.web_root = web_root
+    Handler.verbose = args.verbose
+    host = socket.gethostname()
+    ips = lan_addresses()
+    Handler.info = {"hostname": host, "http_port": args.port,
+                    "https_port": args.https_port if args.https else None, "lan_ips": ips}
+
+    try:
+        http_srv = LabServer((args.host, args.port), Handler)
+    except OSError as e:
+        sys.exit(f"Cannot listen on port {args.port}: {e}\nTry another port:  python server/serve.py --port 8090")
+    start(http_srv, "http")
+
+    https_srv = None
+    if args.https:
+        cert, key = args.cert, args.key
+        if not cert:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            import make_cert
+            cert, key = make_cert.ensure(ips, host)
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.load_cert_chain(cert, key)
+        try:
+            https_srv = TLSLabServer((args.host, args.https_port), Handler, ctx)
+        except OSError as e:
+            sys.exit(f"Cannot listen on port {args.https_port}: {e}")
+        start(https_srv, "https")
+
+    line = "=" * 64
+    print(line)
+    print(" FoCT Virtual Labs  -  Faculty of Computer Technology, ADtU")
+    print(line)
+    print(f" On this computer :  http://localhost:{args.port}/")
+    for ip in ips:
+        print(f" On the lab LAN   :  http://{ip}:{args.port}/")
+    print(f" By name          :  http://{host}:{args.port}/")
+    if https_srv:
+        for ip in ips or ["localhost"]:
+            print(f" Secure (HTTPS)   :  https://{ip}:{args.https_port}/")
+        print("   (each PC must trust the lab certificate once - see Help > Secure mode)")
+    print(line)
+    print(" Students only need a browser (Chrome / Edge / Firefox). Their files are")
+    print(" saved on their own PC; nothing is uploaded here. Press Ctrl+C to stop.")
+    print(line, flush=True)
+
+    last = None
+    try:
+        while True:
+            time.sleep(60)
+            s = STATS.snapshot()
+            if s["requests"] != last:
+                last = s["requests"]
+                print(f"{time.strftime('%H:%M')}  active PCs (5 min): {s['active_pcs_5min']:3d}   "
+                      f"requests: {s['requests']}   sent: {s['mb_sent']} MB", flush=True)
+    except KeyboardInterrupt:
+        print("\nStopping ...")
+        http_srv.shutdown()
+        if https_srv:
+            https_srv.shutdown()
+
+
+if __name__ == "__main__":
+    main()

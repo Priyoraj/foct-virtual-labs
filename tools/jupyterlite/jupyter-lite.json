@@ -1,0 +1,13 @@
+{
+  "jupyter-lite-schema-version": 0,
+  "jupyter-config-data": {
+    "appName": "FoCT Virtual Labs",
+    "faviconUrl": "/assets/brand/favicon-32.png",
+    "litePluginSettings": {
+      "@jupyterlite/pyodide-kernel-extension:kernel": {
+        "pyodideUrl": "/runtimes/pyodide/pyodide.mjs",
+        "disablePyPIFallback": false
+      }
+    }
+  }
+}

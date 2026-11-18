@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FoCT Virtual Labs</title>
+<meta name="description" content="Browser-based programming and productivity labs of the Faculty of Computer Technology, Assam down town University.">
+<meta name="author" content="Mr. Priya Raj Chanda, Assistant Professor [CSE], Faculty of Computer Technology, Assam down town University">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/assets/brand/favicon-192.png">
+<link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png">
+<link rel="stylesheet" href="/assets/css/foct.css">
+<script type="module" src="/assets/js/foct.js"></script>
+<style>
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+  .portal-head { background: #fff; border-bottom: 1px solid #e7e5f1; }
+  .head-row { display: flex; align-items: center; gap: 22px; min-height: 92px; }
+  .brand img { height: 64px; width: auto; display: block; }
+  .head-title { border-left: 2px solid var(--gold); padding-left: 18px; line-height: 1.15; }
+  .head-title .kicker { display: block; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: #6a6690; font-weight: 600; }
+  .head-title strong { font-size: 1.55rem; color: #2a2559; letter-spacing: -.01em; }
+  .head-nav { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .head-nav .btn { color: #2a2559; background: #fff; }
+  .head-nav .btn:hover { background: #f1f0fa; }
+
+  .hero {
+    color: #fff;
+    background:
+      radial-gradient(1200px 400px at 85% -10%, rgba(246,196,0,.18), transparent 60%),
+      radial-gradient(900px 500px at -10% 120%, rgba(123,115,224,.35), transparent 60%),
+      linear-gradient(135deg, #2a2559 0%, #342e6c 55%, #3d3680 100%);
+    border-bottom: 4px solid var(--gold);
+  }
+  .hero .wrap { padding-top: 46px; padding-bottom: 42px; }
+  .hero h1 { margin: 0 0 12px; font-size: clamp(1.8rem, 3.4vw, 2.6rem); line-height: 1.15; letter-spacing: -.02em; max-width: 760px; }
+  .hero h1 em { font-style: normal; color: var(--gold); }
+  .hero p { margin: 0; max-width: 760px; font-size: 1.08rem; color: #dcdaf3; }
+  .hero p strong { color: #fff; }
+  .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .hero-meta span { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 99px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); font-size: .88rem; }
+  .hero-meta svg { width: 16px; height: 16px; color: var(--gold); }
+
+  main.wrap { padding-top: 10px; padding-bottom: 40px; }
+  .sec { display: flex; align-items: baseline; gap: 12px; margin: 34px 0 14px; font-size: 1.15rem; }
+  .sec small { color: var(--muted); font-weight: 400; font-size: .9rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+
+  .card {
+    position: relative; display: flex; flex-direction: column; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 18px 16px; color: var(--text); text-decoration: none;
+    box-shadow: var(--shadow); transition: transform .12s ease, box-shadow .12s ease, border-color .12s;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); border-color: var(--border-strong); }
+  .card-top { display: flex; align-items: center; gap: 12px; }
+  .ico { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; flex: none; font-weight: 800; color: #fff; font-family: var(--mono); letter-spacing: -.03em; }
+  .ico svg { width: 26px; height: 26px; }
+  .card h3 { margin: 0; font-size: 1.08rem; }
+  .card .sub { font-size: .8rem; color: var(--muted); }
+  .card p { margin: 0; color: var(--muted); font-size: .93rem; flex: 1; }
+  .card .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .card .tech { font-size: .78rem; color: var(--faint); }
+  .card .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .card .links a { font-size: .82rem; text-decoration: none; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--border-strong); color: var(--link); background: var(--surface-2); position: relative; z-index: 2; }
+  .card .links a:hover { border-color: var(--accent); }
+  .card .stretch::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
+  .card .stretch { color: inherit; text-decoration: none; }
+
+  .i-c { background: #3949ab; } .i-cpp { background: #283593; font-size: .95rem; }
+  .i-java { background: #c0392b; font-size: .82rem; } .i-py { background: linear-gradient(135deg, #3572a5 50%, #f2c94c 50%); }
+  .i-nb { background: #e8710a; } .i-draw { background: #f08705; } .i-net { background: #00897b; } .i-office { background: #2b579a; }
+  .i-sql { background: #0e7490; } .i-spice { background: #7b1fa2; } .i-circuit { background: #2e7d32; }
+  .i-mongo { background: #3d7a2a; font-size: 1.05rem; } .i-lex { background: #ad1457; font-size: .9rem; } .i-cd { background: #1565c0; }
+
+  .panel { margin-top: 34px; display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; }
+  .box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+  .box h3 { margin: 0 0 8px; font-size: 1.02rem; }
+  .box ol, .box ul { margin: 0; padding-left: 20px; color: var(--muted); }
+  .box li { margin: 5px 0; }
+  .box li strong { color: var(--text); }
+  .checks { list-style: none; padding: 0 !important; margin: 0 0 12px !important; }
+  .checks li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed var(--border); color: var(--text) !important; }
+  .checks li:last-child { border-bottom: 0; }
+  .secure-tip { margin-top: 16px; display: none; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: var(--gold-100); border: 1px solid var(--gold-600); color: var(--text); border-radius: 12px; padding: 10px 14px; }
+  .secure-tip.show { display: flex; }
+
+  footer { border-top: 1px solid var(--border); background: var(--surface); }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; justify-content: space-between; padding-top: 18px; padding-bottom: 22px; color: var(--muted); font-size: .88rem; }
+  footer .naac { color: var(--accent); font-weight: 700; }
+  footer .copy { flex-basis: 100%; }
+  footer .dev strong { color: var(--text); }
+  @media (max-width: 860px) { .panel { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) {
+    .head-row { flex-wrap: wrap; gap: 10px 16px; padding: 12px 0; }
+    .brand img { height: 46px; }
+    .head-title { border-left: 0; padding-left: 0; }
+    .head-nav { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<header class="portal-head">
+  <div class="wrap head-row">
+    <a class="brand" href="/" title="Assam down town University"><img src="/assets/brand/adtu-logo.png" alt="Assam down town University logo"></a>
+    <div class="head-title"><span class="kicker">Faculty of Computer Technology</span><strong>FoCT Virtual Labs</strong></div>
+    <nav class="head-nav">
+      <a class="btn btn-ghost" href="/help.html">Help</a>
+      <button class="btn btn-ghost" id="theme" title="Switch light / dark theme" aria-label="Switch theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <h1>Your computer lab, <em>in the browser</em>.</h1>
+    <p>Write and run <strong>C, C++, Java, Python, SQL and MongoDB</strong>, build scanners and parsers with lex and yacc, work in Jupyter notebooks, simulate circuits and networks, draw diagrams and edit office documents. Nothing to install, no login, and <strong>your files stay on your own computer</strong>.</p>
+    <div class="hero-meta">
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Runs on this PC's browser</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>Save to your computer</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"/><path d="m3 3 18 18"/></svg>Works without internet</span>
+    </div>
+  </div>
+</section>
+
+<main class="wrap">
+  <h2 class="sec">Programming <small>compile and run instantly</small></h2>
+  <div class="grid">
+    <div class="card">
+      <div class="card-top"><div class="ico i-c">C</div><div><h3><a class="stretch" href="/apps/code/?lang=c">C Programming</a></h3><div class="sub">C17 &middot; Clang 22</div></div></div>
+      <p>Write, compile and run C programs with keyboard input, files and helpful error messages.</p>
+      <div class="foot"><span class="tech">gcc-style compiler in WebAssembly</span><span class="chip" data-need="wasm">Ready</span></div>
+    </div>
+    <div class="card">
+      <div class="card-top"><div class="ico i-cpp">C++</div><div><h3><a class="stretch" href="/apps/code/?lang=cpp">C++ Programming</a></h3><div class="sub">C++20 &middot; Clang 22 &middot; STL</div></div></div>
+      <p>Object-oriented programming, templates and the Standard Template Library.</p>
+      <div class="foot"><span class="tech">libc++ in WebAssembly</span><span class="chip" data-need="wasm">Ready</span></div>
+    </div>
+    <div class="card">
+      <div class="card-top"><div class="ico i-java">Java</div><div><h3><a class="stretch" href="/apps/code/?lang=java">Java Programming</a></h3><div class="sub">Java 21 &middot; console programs</div></div></div>
+      <p>Classes, interfaces, collections, streams, exceptions and <code>Scanner</code> input for console programs.</p>
+      <div class="foot"><span class="tech" id="javaTech">OpenJDK 21 in WebAssembly</span><span class="chip" data-need="java">Ready</span></div>
+    </div>
+    <div class="card">
+      <div class="card-top"><div class="ico i-py">Py</div><div><h3><a class="stretch" href="/apps/code/?lang=python">Python IDE</a></h3><div class="sub">Python 3.14 &middot; plain editor</div></div></div>
+      <p>Scripts with <code>input()</code>, NumPy, pandas, Matplotlib plots, SciPy, scikit-learn and 350+ packages.</p>
+      <div class="foot"><span class="tech">Pyodide in WebAssembly</span><span class="chip" data-need="wasm">Ready</span></div>
+    </div>
+    <div class="card">
+      <div class="card-top"><div class="ico i-nb"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v18M12 8h4M12 12h4"/></svg></div><div><h3><a class="stretch" href="/apps/notebook/lab/index.html">Jupyter Notebook</a></h3><div class="sub">JupyterLab &middot; Python kernel</div></div></div>
+      <p>Interactive notebooks for data science and machine learning. Download your <code>.ipynb</code> files when done.</p>
+      <div class="foot"><div class="links"><a href="/apps/notebook/lab/index.html">JupyterLab</a><a href="/apps/notebook/tree/index.html">Classic</a></div><span class="chip" data-need="notebook">Ready</span></div>
+    </div>
+    <div class="card">
+      <div class="card-top"><div class="ico i-sql"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg></div><div><h3><a class="stretch" href="/apps/sql/">SQL Lab</a></h3><div class="sub">SQLite 3 &middot; PostgreSQL 18</div></div></div>
+      <p>Create tables and write queries, joins, views, triggers and PL/pgSQL. Includes sample company, university and library databases.</p>
+      <div class="foot"><span class="tech">sql.js and PGlite in WebAssembly</span><span class="chip" data-need="wasm">Ready</span></div>
+    </div>
+    <div class="card">
+      <div class="card-top"><div class="ico i-mongo">{&thinsp;}</div><div><h3><a class="stretch" href="/apps/mongo/">MongoDB Lab</a></h3><div class="sub">mongosh-style shell &middot; NoSQL</div></div></div>
+      <p>Documents and collections: CRUD, query and update operators, indexes and explain(), aggregation pipelines, $lookup, map-reduce, text search and schema validation.</p>
+      <div class="foot"><span class="tech">MongoDB-compatible engine in the browser</span><span class="chip" data-need="none">Ready</span></div>
+    </div>
+  </div>
+
+  <h2 class="sec">Compiler Design <small>scanners, parsers and automata</small></h2>
+  <div class="grid">
+    <div class="card">
+      <div class="card-top"><div class="ico i-lex">lex</div><div><h3><a class="stretch" href="/apps/code/?lang=lex">Lex &amp; Yacc</a></h3><div class="sub">flex 2.5 &middot; Berkeley yacc &middot; C</div></div></div>
+      <p>Write <code>.l</code> scanners and <code>.y</code> grammars and run them as on Linux: lex, yacc, compile, and type input. See the generated code and yacc's LR states.</p>
+      <div class="foot"><span class="tech">built in your browser on first use</span><span class="chip" data-need="wasm">Ready</span></div>
+    </div>
+    <div class="card">
+      <div class="card-top"><div class="ico i-cd"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="4.5" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="18" cy="12" r="2"/><circle cx="3.5" cy="19.5" r="1.6"/><circle cx="9" cy="19.5" r="1.6"/><path d="M10.6 6 7.3 10.4M13.4 6l3.3 4.4M5.1 13.8l-1 4.1M6.9 13.8l1.4 4.1"/></svg></div><div><h3><a class="stretch" href="/apps/cdtools/">Compiler Design Tools</a></h3><div class="sub">LL(1) &middot; operator precedence &middot; LR &middot; automata</div></div></div>
+      <p>FIRST and FOLLOW, LL(1), operator-precedence and LR parsing tables with step-by-step parsing, regex to NFA to minimal DFA, and three-address code, quadruples, triples and DAGs.</p>
+      <div class="foot"><span class="tech">diagrams by Graphviz</span><span class="chip" data-need="wasm">Ready</span></div>
+    </div>
+  </div>
+
+  <h2 class="sec">Electronics <small>simulate circuits</small></h2>
+  <div class="grid">
+    <div class="card">
+      <div class="card-top"><div class="ico i-spice"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M3 3v18h18"/><path d="M6 13c1.5-7 3.5-7 5 0s3.5 7 5 0 2.5-5 3-5"/></svg></div><div><h3><a class="stretch" href="/apps/spice/">SPICE Simulator</a></h3><div class="sub">ngspice 45 &middot; LTspice netlists</div></div></div>
+      <p>Transient, AC (Bode plot), DC sweep and bias-point analysis of netlists with diodes, transistors and op-amps, with plots and CSV export.</p>
+      <div class="foot"><span class="tech">ngspice in WebAssembly</span><span class="chip" data-need="wasm">Ready</span></div>
+    </div>
+    <div class="card">
+      <div class="card-top"><div class="ico i-circuit"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M2 12h4l1.5-3.5 3 7 3-7 3 7 1.5-3.5h4"/></svg></div><div><h3><a class="stretch" href="/apps/circuit/">Circuit Simulator</a></h3><div class="sub">Falstad CircuitJS &middot; schematics</div></div></div>
+      <p>Draw circuits and watch voltages and current flow live: analog circuits, logic gates, flip-flops and counters, 555 timers, with hundreds of examples.</p>
+      <div class="foot"><span class="tech">runs in the browser</span><span class="chip" data-need="none">Ready</span></div>
+    </div>
+  </div>
+
+  <h2 class="sec">Tools <small>diagrams, networks and documents</small></h2>
+  <div class="grid">
+    <div class="card">
+      <div class="card-top"><div class="ico i-draw"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="3" width="7" height="6" rx="1"/><rect x="14" y="15" width="7" height="6" rx="1"/><path d="M6.5 9v4.5a2 2 0 0 0 2 2H14"/></svg></div><div><h3><a class="stretch" href="/apps/drawio/index.html">Diagrams</a></h3><div class="sub">draw.io &middot; flowcharts, UML, ER</div></div></div>
+      <p>Flowcharts, UML, ER, network and architecture diagrams. Export to PNG, SVG or PDF.</p>
+      <div class="foot"><span class="tech">self-hosted draw.io</span><span class="chip" data-need="none">Ready</span></div>
+    </div>
+    <div class="card">
+      <div class="card-top"><div class="ico i-net"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M10.8 7.2 6.3 15.8M13.2 7.2l4.5 8.6M7.5 18h9"/></svg></div><div><h3><a class="stretch" href="/apps/netsim/">Network Simulator</a></h3><div class="sub">FoCT NetSim &middot; Ethernet, ARP, IP, ICMP</div></div></div>
+      <p>Build networks with PCs, switches and routers, configure IP addressing and routing, and watch packets move.</p>
+      <div class="foot"><span class="tech">built for FoCT</span><span class="chip" data-need="none">Ready</span></div>
+    </div>
+    <div class="card">
+      <div class="card-top"><div class="ico i-office"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></div><div><h3><a class="stretch" href="/apps/office/">Office Suite</a></h3><div class="sub">Documents &middot; Spreadsheets &middot; Presentations</div></div></div>
+      <p>Open, edit and create Word, Excel and PowerPoint files (.docx, .xlsx, .pptx) entirely in the browser.</p>
+      <div class="foot"><span class="tech">ONLYOFFICE editors in WebAssembly</span><span class="chip" data-need="office">Ready</span></div>
+    </div>
+  </div>
+
+  <div class="secure-tip" id="secureTip">
+    <span><strong>Secure mode is available on this server.</strong> It lets Jupyter notebooks read your uploaded files and use <code>input()</code>, and lets apps save straight back to the same file.</span>
+    <span><a class="btn btn-sm" href="/help.html#secure">How to set up</a> <a class="btn btn-sm btn-primary" id="secureLink" href="#">Switch to secure mode</a></span>
+  </div>
+
+  <section class="panel">
+    <div class="box">
+      <h3>Your work stays with you</h3>
+      <ol>
+        <li><strong>Nothing is stored on the lab server.</strong> Programs run inside this browser.</li>
+        <li>Use <strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) to keep a file on this computer or your pen drive, and <strong>Open</strong> to continue later.</li>
+        <li>Unsaved code is kept in this browser as a draft, so an accidental refresh does not lose it.</li>
+        <li>On a shared lab PC, use <strong>Clear my lab data</strong> before you leave.</li>
+      </ol>
+    </div>
+    <div class="box">
+      <h3>This computer</h3>
+      <ul class="checks" id="checks"><li>Checking&hellip;</li></ul>
+      <button class="btn btn-sm" id="clearData">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+        Clear my lab data from this PC
+      </button>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="copy">&copy; Faculty of Computer Technology, Assam down town University, Guwahati &middot; <span class="naac">NAAC A+ Accredited &amp; UGC 12(B) Status Holder</span></span>
+    <span class="dev">Designed and developed by <strong>Mr. Priya Raj Chanda</strong>, Assistant Professor [CSE]</span>
+    <span><a href="/help.html">Help</a> &middot; <a href="/help.html#credits">Open-source credits</a></span>
+  </div>
+</footer>
+
+<script type="module">
+import { systemCheck, inputMode, toggleTheme, clearLabData, modal, toast } from "/assets/js/foct.js";
+
+document.getElementById("theme").onclick = toggleTheme;
+
+const cap = systemCheck();
+const ok = (b) => b ? '<span class="chip ok"><span class="dot"></span>Yes</span>' : '<span class="chip warn"><span class="dot"></span>No</span>';
+const b = cap.browser;
+const modernBrowser = (b.name === "Chrome" && b.version >= 119) || (b.name === "Edge" && b.version >= 119) ||
+  (b.name === "Firefox" && b.version >= 120) || (b.name === "Safari" && b.version >= 18) || (b.name === "Opera" && b.version >= 105);
+const mode = inputMode(cap);
+document.getElementById("checks").innerHTML = `
+  <li><span>Browser</span><span>${b.name} ${b.version || ""} ${modernBrowser ? '<span class="chip ok">OK</span>' : '<span class="chip warn">Please update</span>'}</span></li>
+  <li><span>WebAssembly (C, C++, Python)</span>${ok(cap.wasm)}</li>
+  <li><span>WebAssembly GC (Java)</span>${ok(cap.wasmGC)}</li>
+  <li><span>Live keyboard input to programs</span>${mode === "batch" ? '<span class="chip warn">Input box</span>' : '<span class="chip ok"><span class="dot"></span>Yes</span>'}</li>
+  <li><span>Secure mode (HTTPS)</span>${cap.secure && location.hostname !== "localhost" ? ok(true) : (location.hostname === "localhost" || location.hostname === "127.0.0.1" ? '<span class="chip ok">Local</span>' : '<span class="chip">Basic</span>')}</li>
+  ${cap.memoryGB ? `<li><span>Memory</span><span>${cap.memoryGB >= 4 ? "" : '<span class="chip warn">Low</span> '}${cap.memoryGB}${cap.memoryGB >= 8 ? "+" : ""} GB</span></li>` : ""}`;
+
+for (const chip of document.querySelectorAll("[data-need]")) {
+  const need = chip.dataset.need;
+  let state = "ok", text = "Ready";
+  if (need === "wasm" && !cap.wasm) { state = "bad"; text = "Not supported"; }
+  if (need === "java") {
+    if (cap.isolated) { text = "Full Java 21"; }
+    else if (cap.wasmGC) {
+      state = "warn"; text = "Basic mode";
+      chip.title = "Over plain HTTP Java runs in basic mode. Use secure mode (HTTPS) for the full Java 21 runtime.";
+      document.getElementById("javaTech").textContent = "javac + TeaVM (basic mode)";
+    } else { state = "warn"; text = "Update browser"; }
+  }
+  if (need === "notebook" && !cap.secure) { state = "warn"; text = "Basic mode"; chip.title = "Works, but uploaded files and input() need secure mode (see Help)."; }
+  if (need === "office" && (cap.memoryGB && cap.memoryGB < 4)) { state = "warn"; text = "Needs 4 GB RAM"; }
+  chip.className = "chip " + state;
+  chip.innerHTML = '<span class="dot"></span>' + text;
+}
+
+fetch("/__status").then((r) => r.ok ? r.json() : null).then((s) => {
+  if (!s || s.secure || !s.https_port || cap.secure && location.protocol === "https:") return;
+  const host = location.hostname;
+  document.getElementById("secureLink").href = `https://${host}:${s.https_port}/`;
+  document.getElementById("secureTip").classList.add("show");
+}).catch(() => {});
+
+document.getElementById("clearData").onclick = async () => {
+  const yes = await modal({
+    title: "Clear your lab data from this PC?",
+    html: "<p>This removes unsaved drafts, notebooks kept in this browser, diagrams and settings of FoCT Virtual Labs on <strong>this computer only</strong>. Files you saved to your computer or pen drive are not touched.</p>",
+    actions: [{ label: "Cancel", value: false }, { label: "Clear data", value: true, danger: true }],
+  });
+  if (!yes) return;
+  await clearLabData();
+  toast("Lab data cleared from this browser.");
+};
+</script>
+</body>
+</html>

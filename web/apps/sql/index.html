@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SQL Lab &middot; FoCT Virtual Labs</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png">
+<link rel="stylesheet" href="/assets/css/foct.css">
+<link rel="stylesheet" href="sqllab.css">
+<script type="module" src="/assets/js/foct.js"></script>
+</head>
+<body>
+<header class="foct-bar">
+  <a class="foct-home" href="/" title="Back to FoCT Virtual Labs">
+    <img src="/assets/brand/adtu-seal.png" alt="ADtU seal">
+    <span><span class="t1">FoCT Virtual Labs</span><span class="t2">Assam down town University</span></span>
+  </a>
+  <span class="foct-crumb">/</span>
+  <span class="foct-app-title">SQL Lab</span>
+  <label class="sr-only" for="engine">Database engine</label>
+  <select id="engine" class="engine-select" title="Database engine">
+    <option value="sqlite">SQLite</option>
+    <option value="postgres">PostgreSQL</option>
+  </select>
+  <div class="tb">
+    <button class="btn btn-ghost" id="btnNew" title="New script">New</button>
+    <button class="btn btn-ghost" id="btnOpen" title="Open a .sql script or a database file (Ctrl+O)">Open</button>
+    <button class="btn btn-ghost" id="btnSave" title="Save the script to this computer (Ctrl+S)">Save</button>
+    <div class="menu-wrap">
+      <button class="btn btn-ghost" id="btnMenu" aria-haspopup="true">Samples &amp; examples &#9662;</button>
+      <div class="menu" id="menu" hidden>
+        <div class="menu-label">Load a sample database</div>
+        <div id="datasets"></div>
+        <hr>
+        <div class="menu-label">Example queries</div>
+        <div id="examples"></div>
+        <hr>
+        <button data-cmd="help">Help and MySQL / Oracle tips</button>
+        <button data-cmd="theme">Switch light / dark</button>
+      </div>
+    </div>
+  </div>
+  <span class="spacer"></span>
+  <span class="chip" id="engineChip"><span class="dot"></span><span id="engineText">Starting&hellip;</span></span>
+  <button class="btn btn-run" id="btnRun" title="Run the selection, or everything (Ctrl+Enter / F5)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12-7.5z"/></svg>Run</button>
+  <button class="btn btn-stop" id="btnStop" title="Stop (resets the database)" hidden>Stop</button>
+</header>
+
+<main class="lab">
+  <aside class="schema" aria-label="Tables">
+    <div class="schema-head">
+      <strong>Tables</strong>
+      <button class="btn btn-ghost btn-sm" id="btnRefresh" title="Refresh">&#8635;</button>
+    </div>
+    <div class="schema-list" id="schemaList"><p class="muted">No tables yet.</p></div>
+    <div class="schema-actions">
+      <button class="btn btn-sm" id="btnSaveDb" title="Save the whole database to this computer">Save database</button>
+      <button class="btn btn-sm" id="btnClearDb" title="Start with an empty database">Empty database</button>
+    </div>
+  </aside>
+  <section class="work">
+    <div id="editor" class="editor"></div>
+    <div class="hsplit" id="hsplit" role="separator" aria-orientation="horizontal" tabindex="0" title="Drag to resize"></div>
+    <div class="results" id="results" aria-live="polite"></div>
+  </section>
+</main>
+<footer class="statusbar">
+  <span id="status">Ready</span>
+  <span class="spacer"></span>
+  <span id="cursor">Ln 1, Col 1</span>
+</footer>
+
+<script src="/vendor/monaco/vs/loader.js"></script>
+<script type="module" src="sqllab.js"></script>
+</body>
+</html>

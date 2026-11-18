@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code &middot; FoCT Virtual Labs</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png">
+<link rel="stylesheet" href="/assets/css/foct.css">
+<link rel="stylesheet" href="ide.css">
+<script type="module" src="/assets/js/foct.js"></script>
+</head>
+<body>
+<header class="foct-bar">
+  <a class="foct-home" href="/" title="Back to FoCT Virtual Labs">
+    <img src="/assets/brand/adtu-seal.png" alt="ADtU seal">
+    <span><span class="t1">FoCT Virtual Labs</span><span class="t2">Assam down town University</span></span>
+  </a>
+  <span class="foct-crumb">/</span>
+  <label class="sr-only" for="lang">Language</label>
+  <select id="lang" class="lang-select" title="Programming language">
+    <option value="c">C</option>
+    <option value="cpp">C++</option>
+    <option value="java">Java</option>
+    <option value="python">Python</option>
+    <option value="lex">Lex &amp; Yacc</option>
+  </select>
+  <div class="tb">
+    <button class="btn btn-ghost" id="btnNew" title="New file (Alt+N)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14h6"/></svg><span class="hide-sm">New</span></button>
+    <button class="btn btn-ghost" id="btnOpen" title="Open a file from this computer (Ctrl+O)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="hide-sm">Open</span></button>
+    <button class="btn btn-ghost" id="btnSave" title="Save to this computer (Ctrl+S)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 3v5h7V3M8 21v-7h8v7"/></svg><span class="hide-sm">Save</span></button>
+    <div class="menu-wrap">
+      <button class="btn btn-ghost" id="btnMenu" title="More" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+      <div class="menu" id="menu" role="menu" hidden>
+        <button role="menuitem" data-cmd="saveAs">Save as&hellip; <kbd>Ctrl+Shift+S</kbd></button>
+        <button role="menuitem" data-cmd="saveAll">Download all files (.zip)</button>
+        <button role="menuitem" data-cmd="rename">Rename this file&hellip;</button>
+        <hr>
+        <div class="menu-label">Examples</div>
+        <div id="examples"></div>
+        <hr>
+        <button role="menuitem" data-cmd="settings">Settings&hellip;</button>
+        <button role="menuitem" data-cmd="theme">Switch light / dark</button>
+        <button role="menuitem" data-cmd="help">Help &amp; shortcuts</button>
+      </div>
+    </div>
+  </div>
+  <span class="spacer"></span>
+  <span class="chip" id="engine" title="Compiler / interpreter status"><span class="dot"></span><span id="engineText">Starting&hellip;</span></span>
+  <button class="btn btn-run" id="btnRun" title="Run (Ctrl+Enter or F5)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12-7.5z"/></svg>Run</button>
+  <button class="btn btn-stop" id="btnStop" title="Stop the running program (Ctrl+.)" hidden><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>Stop</button>
+</header>
+
+<main class="ide" id="ide">
+  <section class="pane editor-pane">
+    <div class="filetabs" id="filetabs" role="tablist"></div>
+    <div id="editor" class="editor"></div>
+  </section>
+  <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" tabindex="0" title="Drag to resize"></div>
+  <section class="pane side-pane">
+    <div class="side-tabs" role="tablist">
+      <button class="stab active" data-pane="output" role="tab">Output</button>
+      <button class="stab" data-pane="input" role="tab">Input <span class="badge" id="inputBadge" hidden>set</span></button>
+      <button class="stab" data-pane="files" role="tab">Files <span class="badge" id="filesBadge" hidden>0</span></button>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost btn-sm" id="btnClear" title="Clear output">Clear</button>
+    </div>
+    <div class="side-body">
+      <div class="console" id="console" data-pane="output" tabindex="0" aria-live="polite"></div>
+      <div class="input-pane" data-pane="input" hidden>
+        <p class="hint" id="inputHint">Optional: type the input your program reads (one value per line). When it runs out, the program asks you for more in the Output panel.</p>
+        <textarea id="stdinText" spellcheck="false" placeholder="e.g.&#10;5&#10;10 20 30"></textarea>
+      </div>
+      <div class="files-pane" data-pane="files" hidden>
+        <p class="hint">Files your program creates (with <code>fopen</code>, <code>open()</code>, <code>ofstream</code>&hellip;) appear here. Your editor tabs are also visible to the program as files.</p>
+        <ul id="fileList" class="file-list"></ul>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="statusbar">
+  <span id="status">Ready</span>
+  <span class="spacer"></span>
+  <span id="mode" class="hide-sm"></span>
+  <span id="cursor">Ln 1, Col 1</span>
+</footer>
+
+<script src="/vendor/monaco/vs/loader.js"></script>
+<script type="module" src="ide.js"></script>
+</body>
+</html>

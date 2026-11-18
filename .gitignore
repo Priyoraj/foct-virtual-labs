@@ -1,0 +1,37 @@
+# Third-party runtimes and apps: tools/setup.py downloads and builds them (about 860 MB).
+# After cloning, run:  python tools/setup.py
+/.downloads/
+/.build/
+/web/runtimes/pyodide/
+/web/runtimes/clang/
+/web/runtimes/teavm/
+/web/runtimes/sql/
+/web/runtimes/spice/
+/web/runtimes/mongo/
+/web/runtimes/lexyacc/
+/web/runtimes/viz/
+/web/runtimes/pywheels/
+/web/runtimes/javabox/javabox-direct.*
+/web/runtimes/javabox/LICENSE
+/web/vendor/monaco/
+/web/apps/circuit/
+/web/apps/drawio/
+/web/apps/office/
+/web/apps/notebook/
+.foct-version
+
+# Pre-compressed copies written by "setup.py --only compress"
+*.gz
+*.br
+
+# HTTPS certificates made by server/make_cert.py (the CA private key must never leave the server)
+/server/certs/
+/web/foct-lab-ca.crt
+
+# Python and editor clutter
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,218 @@
+/* FoCT Virtual Labs - shared design tokens and components
+   Brand colours sampled from the Assam down town University logo. */
+:root {
+  --navy: #342e6c;
+  --navy-600: #2a2559;
+  --navy-400: #5a52b3;
+  --navy-100: #ecebf8;
+  --gold: #f6c400;
+  --gold-600: #d9a900;
+  --gold-100: #fff6cf;
+
+  --bg: #f5f5fa;
+  --surface: #ffffff;
+  --surface-2: #fafaff;
+  --text: #1d1a38;
+  --muted: #5d597c;
+  --faint: #8c89a6;
+  --border: #e2e0ee;
+  --border-strong: #cfcce3;
+  --accent: var(--navy);
+  --accent-text: #ffffff;
+  --link: #3f37a3;
+  --ok: #157a4a;
+  --ok-bg: #e3f6ec;
+  --warn: #8a5a00;
+  --warn-bg: #fff3d6;
+  --bad: #b3261e;
+  --bad-bg: #fde8e7;
+  --shadow: 0 1px 2px rgba(29, 26, 56, .06), 0 4px 16px rgba(29, 26, 56, .06);
+  --shadow-lg: 0 2px 4px rgba(29, 26, 56, .08), 0 12px 32px rgba(29, 26, 56, .12);
+  --radius: 14px;
+  --radius-sm: 9px;
+  --font: "Segoe UI", system-ui, -apple-system, "Noto Sans", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, "JetBrains Mono", "DejaVu Sans Mono", Menlo, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121120;
+    --surface: #1b1a2c;
+    --surface-2: #201f33;
+    --text: #ecebf7;
+    --muted: #aeabc9;
+    --faint: #7d7a99;
+    --border: #2d2b45;
+    --border-strong: #3c3a5a;
+    --accent: #7b73e0;
+    --navy-100: #26244a;
+    --gold-100: #3a3214;
+    --link: #a9a3ff;
+    --ok: #5fd39b;
+    --ok-bg: #12301f;
+    --warn: #f2c25b;
+    --warn-bg: #3a2e10;
+    --bad: #ff8b84;
+    --bad-bg: #3d1716;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
+    --shadow-lg: 0 2px 4px rgba(0, 0, 0, .35), 0 12px 32px rgba(0, 0, 0, .4);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #121120;
+  --surface: #1b1a2c;
+  --surface-2: #201f33;
+  --text: #ecebf7;
+  --muted: #aeabc9;
+  --faint: #7d7a99;
+  --border: #2d2b45;
+  --border-strong: #3c3a5a;
+  --accent: #7b73e0;
+  --navy-100: #26244a;
+  --gold-100: #3a3214;
+  --link: #a9a3ff;
+  --ok: #5fd39b;
+  --ok-bg: #12301f;
+  --warn: #f2c25b;
+  --warn-bg: #3a2e10;
+  --bad: #ff8b84;
+  --bad-bg: #3d1716;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, .35), 0 12px 32px rgba(0, 0, 0, .4);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 var(--font);
+}
+a { color: var(--link); }
+img { max-width: 100%; }
+button, input, select, textarea { font: inherit; color: inherit; }
+code, kbd, pre { font-family: var(--mono); font-size: .92em; }
+kbd {
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0 .35em;
+  background: var(--surface-2);
+}
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: .45em;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  padding: .42em .85em;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  transition: background .12s, border-color .12s, transform .05s;
+}
+.btn:hover { background: var(--surface-2); border-color: var(--accent); }
+.btn:active { transform: translateY(1px); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+.btn svg { width: 1.05em; height: 1.05em; flex: none; }
+.btn-primary { background: var(--navy); border-color: var(--navy); color: #fff; }
+.btn-primary:hover { background: var(--navy-600); border-color: var(--navy-600); }
+:root[data-theme="dark"] .btn-primary { background: var(--accent); border-color: var(--accent); }
+.btn-run { background: #1f8f55; border-color: #1f8f55; color: #fff; font-weight: 600; }
+.btn-run:hover { background: #18774a; border-color: #18774a; }
+.btn-stop { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn-stop:hover { filter: brightness(.95); background: var(--bad); }
+.btn-ghost { border-color: transparent; background: transparent; }
+.btn-ghost:hover { background: var(--navy-100); border-color: transparent; }
+.btn-sm { padding: .25em .6em; font-size: .88em; }
+
+/* ---------- top bar used by every app ---------- */
+.foct-bar {
+  display: flex; align-items: center; gap: .75rem;
+  height: 52px; padding: 0 .9rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 20;
+}
+.foct-bar::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: linear-gradient(90deg, var(--navy) 0 70%, var(--gold) 70% 100%);
+  opacity: .9;
+}
+.foct-home {
+  display: flex; align-items: center; gap: .55rem;
+  text-decoration: none; color: var(--text); min-width: 0;
+}
+.foct-home img {
+  height: 36px; width: 36px; object-fit: contain;
+  background: #fff; border-radius: 50%; padding: 1px;
+}
+.foct-home > span { display: flex; flex-direction: column; line-height: 1.2; }
+.foct-home .t1 { font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+.foct-home .t2 { font-size: .74rem; color: var(--muted); white-space: nowrap; line-height: 1.1; }
+.foct-crumb { color: var(--faint); }
+.foct-app-title { font-weight: 600; white-space: nowrap; }
+.foct-bar .spacer { flex: 1; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: .35em;
+  padding: .12em .6em; border-radius: 99px;
+  font-size: .78rem; font-weight: 600;
+  background: var(--navy-100); color: var(--accent);
+  white-space: nowrap;
+}
+.chip.ok { background: var(--ok-bg); color: var(--ok); }
+.chip.warn { background: var(--warn-bg); color: var(--warn); }
+.chip.bad { background: var(--bad-bg); color: var(--bad); }
+.chip .dot { width: .5em; height: .5em; border-radius: 50%; background: currentColor; }
+
+/* ---------- toast ---------- */
+.foct-toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 1000; }
+.foct-toast {
+  background: var(--text); color: var(--bg);
+  padding: .6rem .9rem; border-radius: 10px; box-shadow: var(--shadow-lg);
+  max-width: min(420px, calc(100vw - 32px)); font-size: .92rem;
+  animation: toast-in .18s ease-out;
+}
+.foct-toast.bad { background: var(--bad); color: #fff; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+
+/* ---------- modal ---------- */
+.foct-modal-back {
+  position: fixed; inset: 0; background: rgba(15, 13, 35, .45);
+  display: grid; place-items: center; z-index: 900; padding: 16px;
+}
+.foct-modal {
+  background: var(--surface); color: var(--text);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto;
+  padding: 1.2rem 1.3rem;
+}
+.foct-modal h2 { margin: 0 0 .6rem; font-size: 1.15rem; }
+.foct-modal .actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; flex-wrap: wrap; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.foct-home { flex-shrink: 0; }
+/* narrower windows: keep the seal, drop the long names so the app's own buttons stay visible */
+@media (max-width: 1080px) {
+  .foct-home > span { display: none; }
+}
+@media (max-width: 900px) {
+  .foct-bar .chip { display: none; }
+}
+@media (max-width: 640px) {
+  .foct-home .t2, .foct-crumb, .hide-sm { display: none; }
+}

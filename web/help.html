@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Mr. Priya Raj Chanda, Assistant Professor [CSE], Faculty of Computer Technology, Assam down town University">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Help &middot; FoCT Virtual Labs</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png">
+<link rel="stylesheet" href="/assets/css/foct.css">
+<script type="module" src="/assets/js/foct.js"></script>
+<style>
+  body { background: var(--bg); }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px 60px; }
+  .layout { display: grid; grid-template-columns: 220px 1fr; gap: 28px; margin-top: 24px; }
+  nav.toc { position: sticky; top: 16px; align-self: start; font-size: .92rem; }
+  nav.toc a { display: block; padding: 5px 10px; border-radius: 8px; color: var(--muted); text-decoration: none; }
+  nav.toc a:hover { background: var(--navy-100); color: var(--text); }
+  article h1 { font-size: 1.8rem; margin: 0 0 6px; letter-spacing: -.01em; }
+  article h2 { margin: 36px 0 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 1.25rem; }
+  article h3 { margin: 22px 0 8px; font-size: 1.02rem; }
+  article p, article li { color: var(--text); }
+  article .lead { color: var(--muted); font-size: 1.05rem; }
+  table.feas { width: 100%; border-collapse: collapse; font-size: .92rem; background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+  table.feas th, table.feas td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.feas th { background: var(--surface-2); color: var(--muted); font-weight: 600; }
+  .note { background: var(--gold-100); border: 1px solid var(--gold-600); border-radius: 12px; padding: 12px 16px; margin: 14px 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin: 12px 0; box-shadow: var(--shadow); }
+  pre { background: #0f1222; color: #e6e8f5; padding: 12px 14px; border-radius: 10px; overflow: auto; font-size: .86rem; }
+  .ok { color: var(--ok); font-weight: 700; } .part { color: var(--warn); font-weight: 700; } .no { color: var(--bad); font-weight: 700; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; } }
+</style>
+</head>
+<body>
+<header class="foct-bar">
+  <a class="foct-home" href="/" title="Back to FoCT Virtual Labs">
+    <img src="/assets/brand/adtu-seal.png" alt="ADtU seal">
+    <span><span class="t1">FoCT Virtual Labs</span><span class="t2">Assam down town University</span></span>
+  </a>
+  <span class="foct-crumb">/</span>
+  <span class="foct-app-title">Help</span>
+</header>
+
+<div class="wrap">
+<div class="layout">
+<nav class="toc" aria-label="On this page">
+  <a href="#start">Getting started</a>
+  <a href="#saving">Saving your work</a>
+  <a href="#apps">What each lab can do</a>
+  <a href="#secure">Secure mode (HTTPS)</a>
+  <a href="#trouble">Troubleshooting</a>
+  <a href="#admin">For lab administrators</a>
+  <a href="#credits">Open-source credits</a>
+</nav>
+<article>
+  <h1>FoCT Virtual Labs &mdash; Help</h1>
+  <p class="lead">Every lab runs inside your web browser. The lab server only sends the programs to your browser; it never runs, receives or stores your work.</p>
+
+  <h2 id="start">Getting started</h2>
+  <ol>
+    <li>Open the lab address your teacher gave you (for example <code>http://labserver:8080</code>) in <b>Google Chrome</b> or <b>Microsoft Edge</b> (Firefox also works).</li>
+    <li>Pick a lab on the home page. The first time, a lab may take 10&ndash;30 seconds to load; after that it is cached by the browser and opens quickly.</li>
+    <li>In the code labs press <b>Run</b> (<kbd>Ctrl</kbd>+<kbd>Enter</kbd>). When your program asks for input, type in the <b>Output</b> panel and press <kbd>Enter</kbd>.</li>
+  </ol>
+
+  <h2 id="saving">Saving your work</h2>
+  <div class="note"><b>Nothing is saved on the lab server.</b> Keep your files on your own computer, pen drive or cloud drive.</div>
+  <ul>
+    <li><b>Code labs:</b> <b>Save</b> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) downloads the file (or, in secure mode, lets you choose where to save it and later saves straight back to it). <b>Open</b> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) loads a file. The menu has <i>Download all files (.zip)</i>.</li>
+    <li><b>Jupyter notebooks:</b> notebooks live in this browser only. Use <i>File &rarr; Download</i> to keep the <code>.ipynb</code>. Use the upload button (&uarr;) to bring a notebook or a data file back.</li>
+    <li><b>Diagrams:</b> <i>File &rarr; Save as</i> / <i>Export as</i> (PNG, SVG, PDF) saves to your computer.</li>
+    <li><b>MongoDB Lab:</b> your databases stay in this browser between visits. <b>Save databases</b> writes them all to one <code>.json</code> file (open it again with <b>Open databases</b>); <b>Export</b> saves one collection as JSON or CSV, as <code>mongoexport</code> does; <b>Save</b> keeps your script as a <code>.js</code> file.</li>
+    <li><b>Compiler design tools:</b> your last grammar, expression and statements are remembered in this browser; print the page (<kbd>Ctrl</kbd>+<kbd>P</kbd>) to keep the tables as a PDF.</li>
+    <li><b>SQL Lab:</b> <b>Save</b> keeps your script as a <code>.sql</code> file; <i>Save database</i> keeps the whole database (<code>.sqlite</code> for SQLite, <code>.pgdata.tar.gz</code> for PostgreSQL) so you can open it again later.</li>
+    <li><b>SPICE simulator:</b> <b>Save</b> keeps the netlist as a <code>.cir</code> file; <b>CSV</b> and <b>PNG</b> save the results and the plot.</li>
+    <li><b>Circuit simulator:</b> <i>File &rarr; Save As</i> downloads a <code>.txt</code> circuit file; <i>File &rarr; Open File</i> loads it.</li>
+    <li><b>Network simulator:</b> <b>Save</b> keeps a <code>.foctnet</code> file; <b>Open</b> loads it.</li>
+    <li><b>Office:</b> <kbd>Ctrl</kbd>+<kbd>S</kbd> or <i>File &rarr; Download as</i> saves <code>.docx</code>, <code>.xlsx</code>, <code>.pptx</code> or PDF.</li>
+    <li>Unsaved code is kept as a draft in this browser so a refresh does not lose it. On a shared PC, press <b>Clear my lab data</b> on the home page before you leave.</li>
+  </ul>
+
+  <h2 id="apps">What each lab can do</h2>
+  <table class="feas">
+    <tr><th>Lab</th><th>Runs on</th><th>Good for</th><th>Not available</th></tr>
+    <tr><td><b>C</b></td><td>Clang 22 compiled to WebAssembly</td><td>C89&ndash;C23, <code>scanf</code>/<code>printf</code>, files, pointers, structures, <code>math.h</code>, <code>time.h</code>. Turbo&nbsp;C habits such as <code>conio.h</code> (<code>getch</code>, <code>clrscr</code>), <code>gets</code> and <code>system("cls")</code> also work.</td><td><code>graphics.h</code>, threads, sockets, <code>fork</code>.</td></tr>
+    <tr><td><b>C++</b></td><td>Clang 22 + libc++</td><td>C++11&ndash;C++23, classes, inheritance, templates, STL, exceptions (<code>try</code>/<code>catch</code>/<code>throw</code>), <code>bits/stdc++.h</code>, file streams.</td><td>Threads, <code>graphics.h</code>.</td></tr>
+    <tr><td><b>Java</b></td><td>Secure mode: full OpenJDK&nbsp;21 in WebAssembly.<br>Basic mode: javac + TeaVM.</td><td>Console programs: classes, interfaces, collections, streams, generics, exceptions, <code>Scanner</code>, <code>BufferedReader</code>, <code>printf</code>.</td><td>Swing/AWT/JavaFX windows, JDBC, networking. In basic mode, JVM errors (divide by zero, bad array index, <code>null</code>) stop the program instead of reaching <code>catch</code>.</td></tr>
+    <tr><td><b>Python IDE</b></td><td>Pyodide (Python 3.14)</td><td><code>input()</code>, NumPy, pandas, Matplotlib (plots appear in the output), SciPy, scikit-learn, statsmodels, SymPy, NetworkX, OpenCV, Pillow, NLTK and 350+ packages; seaborn, openpyxl and plotly install on first import.</td><td>tkinter/turtle windows, TensorFlow, PyTorch.</td></tr>
+    <tr><td><b>Jupyter</b></td><td>JupyterLite + Pyodide</td><td>Notebooks for data science and ML. <code>%pip install seaborn openpyxl plotly ipywidgets</code> works offline.</td><td>Reading uploaded files and <code>input()</code> need secure mode.</td></tr>
+    <tr><td><b>SQL Lab</b></td><td>SQLite 3 (sql.js) and PostgreSQL&nbsp;18 (PGlite), both in WebAssembly</td><td>DDL and DML, constraints, joins, subqueries, <code>GROUP BY</code>/<code>HAVING</code>, views, indexes, transactions, triggers; PL/pgSQL functions and procedures in PostgreSQL. MySQL-style <code>SHOW TABLES</code>, <code>DESC</code> and <code>USE</code> are understood. Sample databases: company (EMP/DEPT), university, library.</td><td>MySQL and Oracle servers themselves (their SQL is close to PostgreSQL's), several users sharing one database.</td></tr>
+    <tr><td><b>MongoDB Lab</b></td><td>A MongoDB-compatible engine in the browser (mingo) with a <code>mongosh</code>-style shell</td><td>CRUD (<code>insertOne</code>, <code>find</code>, <code>updateMany</code>&hellip;), query, projection and update operators, cursors (<code>sort</code>, <code>limit</code>, <code>forEach</code>, <code>it</code>), indexes with <code>unique</code> and <code>explain()</code>, aggregation (<code>$group</code>, <code>$lookup</code>, <code>$unwind</code>, <code>$bucket</code>&hellip;), map-reduce, <code>$text</code> search, <code>$jsonSchema</code> validation, JSON/CSV import and export. Sample college, shop and library databases.</td><td>A real MongoDB server: users and roles, replica sets, sharding, change streams. Very large datasets are slow.</td></tr>
+    <tr><td><b>Lex &amp; Yacc</b></td><td>flex 2.5.4 and Berkeley yacc, built into WebAssembly by your browser the first time (about 20&nbsp;s), then Clang</td><td>Scanners (<code>.l</code>) and grammars (<code>.y</code>) as in lab manuals: <code>yytext</code>, <code>yylval</code>, <code>%union</code>, precedence, error recovery, <code>#include "lex.yy.c"</code>; the <code>-ll</code>/<code>-ly</code> defaults when <code>main</code>, <code>yywrap</code> or <code>yyerror</code> are missing. The generated <code>lex.yy.c</code>, <code>y.tab.c</code> and <code>y.output</code> (LR states, conflicts) can be opened.</td><td>flex 2.6 extras such as <code>%option reentrant</code> and bison-only directives (<code>%define</code>, <code>%code</code>).</td></tr>
+    <tr><td><b>Compiler design tools</b></td><td>Written for this lab, diagrams by Graphviz</td><td>FIRST/FOLLOW, LL(1) table and parse trace, removing left recursion, left factoring; operator grammars, LEADING/TRAILING, precedence relations and functions with parse trace; LR(0)/SLR(1)/LALR(1)/CLR(1) item sets, GOTO graph, tables, conflicts and parse traces; regex &rarr; &epsilon;-NFA &rarr; DFA &rarr; minimal DFA and the followpos method; three-address code, quadruples, triples, DAG.</td><td>Code generation for a real machine.</td></tr>
+    <tr><td><b>SPICE simulator</b></td><td>ngspice&nbsp;45 in WebAssembly</td><td>Netlists with R, L, C, sources, diodes, BJTs, MOSFETs, JFETs, op-amps and subcircuits; <code>.tran</code>, <code>.ac</code> (Bode plot), <code>.dc</code> sweeps and <code>.op</code>; plots, CSV and PNG export. Netlists exported from LTspice (<i>View &rarr; SPICE Netlist</i>) are adjusted automatically, and common parts (1N4148, 1N4007, 2N2222, BC547, uA741&hellip;) are built in.</td><td>LTspice itself (a Windows desktop program) and its <code>.asc</code> schematics, <code>.step</code> sweeps, vendor model libraries.</td></tr>
+    <tr><td><b>Circuit simulator</b></td><td>Falstad CircuitJS</td><td>Drawing circuits and watching current flow live: DC and AC circuits, filters, diodes, transistors, op-amps, 555 timer, logic gates, flip-flops, counters; hundreds of ready-made examples. <i>File &rarr; Save As</i> keeps your circuit on your computer.</td><td>Detailed device models (use the SPICE simulator for those).</td></tr>
+    <tr><td><b>Diagrams</b></td><td>draw.io (self-hosted, offline)</td><td>Flowcharts, UML, ER, DFD, network diagrams; export PNG/SVG/PDF.</td><td>Cloud storage (Google Drive etc.) is switched off.</td></tr>
+    <tr><td><b>Network simulator</b></td><td>FoCT NetSim (built for this lab)</td><td>PCs, servers, switches, hubs, routers; IPv4 addressing, subnet masks, default gateways, static routes; ARP, switching, ICMP <code>ping</code>/<code>tracert</code>; step-by-step packet view.</td><td>VLANs, DHCP, DNS, TCP/UDP services, Cisco IOS.</td></tr>
+    <tr><td><b>Office</b></td><td>ONLYOFFICE editors in WebAssembly</td><td>Word, Excel and PowerPoint files (<code>.docx</code>, <code>.xlsx</code>, <code>.pptx</code>): formatting, tables, formulas, charts, slides; save as PDF.</td><td>Real-time co-editing, macros. Needs a PC with 4&nbsp;GB+ RAM.</td></tr>
+  </table>
+
+  <h2 id="secure">Secure mode (HTTPS)</h2>
+  <p>The labs work over plain <code>http://</code>. Opening them over <code>https://</code> with the lab certificate (<b>secure mode</b>) adds:</p>
+  <ul>
+    <li>the <b>full Java 21</b> runtime (instead of basic mode),</li>
+    <li>Jupyter notebooks that can read uploaded files and use <code>input()</code>,</li>
+    <li>saving straight back to the same file on your computer,</li>
+    <li>offline caching for faster start-up.</li>
+  </ul>
+  <h3>Install the lab certificate on a PC (once per PC)</h3>
+  <div class="card">
+    <p><b>Windows (Chrome / Edge):</b></p>
+    <ol>
+      <li>Download <a href="/foct-lab-ca.crt">foct-lab-ca.crt</a> and open it.</li>
+      <li>Click <i>Install Certificate&hellip;</i> &rarr; <i>Current User</i> &rarr; <i>Place all certificates in the following store</i> &rarr; <i>Browse</i> &rarr; <b>Trusted Root Certification Authorities</b> &rarr; <i>Finish</i>, then <i>Yes</i> on the security warning.</li>
+      <li>Restart the browser and open the <code>https://</code> address shown on the server window (port 8443).</li>
+    </ol>
+    <p>Administrators can install it for all users from an elevated command prompt:</p>
+    <pre>certutil -addstore -f Root foct-lab-ca.crt</pre>
+    <p>or push it with Group Policy (<i>Computer Configuration &rarr; Windows Settings &rarr; Security Settings &rarr; Public Key Policies &rarr; Trusted Root Certification Authorities</i>). If the labs are re-imaged for exams, include the certificate in the lab image.</p>
+    <p><b>Firefox:</b> <i>Settings &rarr; Privacy &amp; Security &rarr; Certificates &rarr; View Certificates &rarr; Authorities &rarr; Import</i>, tick &ldquo;Trust this CA to identify websites&rdquo;.</p>
+    <p><b>Linux (Ubuntu):</b></p>
+    <pre>sudo cp foct-lab-ca.crt /usr/local/share/ca-certificates/ &amp;&amp; sudo update-ca-certificates</pre>
+  </div>
+  <p>The certificate can only vouch for addresses inside the lab network (private IP ranges and local names), so it cannot be misused to impersonate real websites.</p>
+
+  <h2 id="trouble">Troubleshooting</h2>
+  <ul>
+    <li><b>A lab is slow the first time:</b> the browser downloads the compiler or Python once (C/C++ about 30&nbsp;MB, Python 10&nbsp;MB plus packages, Java 7&nbsp;MB or 80&nbsp;MB for full Java, Office about 60&nbsp;MB, PostgreSQL 5&nbsp;MB, SPICE 6&nbsp;MB, diagrams 0.5&nbsp;MB). The first Lex &amp; Yacc run on a PC builds lex and yacc (about 20&nbsp;seconds). Later visits use the browser cache.</li>
+    <li><b>&ldquo;Update browser&rdquo; on the home page:</b> use a current Chrome, Edge or Firefox (2024 or newer).</li>
+    <li><b>The program waits forever:</b> it is probably waiting for input &mdash; type in the Output panel. Use <b>Stop</b> to end a program that loops forever.</li>
+    <li><b>Out of memory / blank page:</b> close other tabs; the Office and Java labs need a PC with at least 4&nbsp;GB of RAM.</li>
+    <li><b>Lost work:</b> open the same lab on the same PC and browser: the last draft is restored automatically.</li>
+  </ul>
+
+  <h2 id="admin">For lab administrators</h2>
+  <div class="card">
+    <p>Start the server on any PC of the lab network (Windows, Linux or macOS with Python&nbsp;3.8+):</p>
+    <pre>start-server.bat            (Windows: double-click)
+./start-server.sh           (Linux / macOS)
+python server/serve.py --https    (also serve secure mode on port 8443)</pre>
+    <p>The window shows the addresses to give to students. Allow the program through the firewall when Windows asks (or run <code>server\allow-firewall.bat</code> as administrator). The server needs very little CPU: all compiling and running happens on the students&rsquo; PCs. Live statistics: <a href="/__status">/__status</a>.</p>
+  </div>
+
+  <h2 id="credits">Open-source credits</h2>
+  <p>FoCT Virtual Labs is built on these projects (licences in brackets). Many thanks to their authors.</p>
+  <ul>
+    <li><a href="https://pyodide.org" rel="noopener">Pyodide</a> (MPL-2.0) and the CPython, NumPy, pandas, Matplotlib, SciPy and scikit-learn projects</li>
+    <li><a href="https://jupyterlite.readthedocs.io" rel="noopener">JupyterLite</a> and JupyterLab (BSD-3-Clause)</li>
+    <li><a href="https://github.com/YoWASP/clang" rel="noopener">YoWASP Clang/LLD</a> (Apache-2.0 with LLVM exception; ISC packaging) with wasi-libc and libc++</li>
+    <li><a href="https://github.com/bmarti44/javabox" rel="noopener">JavaBox</a> (MIT) with <a href="https://openjdk.org" rel="noopener">OpenJDK 21</a> (GPLv2 with Classpath Exception)</li>
+    <li><a href="https://teavm.org" rel="noopener">TeaVM</a> and <a href="https://github.com/konsoletyper/teavm-javac" rel="noopener">teavm-javac</a> (Apache-2.0)</li>
+    <li><a href="https://microsoft.github.io/monaco-editor/" rel="noopener">Monaco Editor</a> (MIT)</li>
+    <li><a href="https://github.com/kofrasa/mingo" rel="noopener">mingo</a> (MIT), the MongoDB query language in JavaScript, and <a href="https://github.com/acornjs/acorn" rel="noopener">acorn</a> (MIT)</li>
+    <li><a href="https://github.com/westes/flex" rel="noopener">flex</a> 2.5.4 (BSD licence; Vern Paxson and the University of California) and <a href="https://invisible-island.net/byacc/" rel="noopener">Berkeley yacc</a> (public domain; maintained by Thomas E. Dickey)</li>
+    <li><a href="https://graphviz.org" rel="noopener">Graphviz</a> (EPL) through <a href="https://github.com/mdaines/viz-js" rel="noopener">viz.js</a> (MIT)</li>
+    <li><a href="https://github.com/sql-js/sql.js" rel="noopener">sql.js</a> (MIT) with <a href="https://sqlite.org" rel="noopener">SQLite</a> (public domain), and <a href="https://pglite.dev" rel="noopener">PGlite</a> (Apache-2.0 / PostgreSQL Licence)</li>
+    <li><a href="https://ngspice.sourceforge.io" rel="noopener">ngspice</a> (BSD-3-Clause and others) via <a href="https://github.com/eelab-dev/EEcircuit-engine" rel="noopener">EEcircuit-engine</a> (MIT), and <a href="https://github.com/leeoniya/uPlot" rel="noopener">uPlot</a> (MIT)</li>
+    <li><a href="https://www.falstad.com/circuit/" rel="noopener">CircuitJS</a> by Paul Falstad and Iain Sharp (GPL-2.0; <a href="https://github.com/pfalstad/circuitjs1" rel="noopener">source code</a>)</li>
+    <li><a href="https://github.com/jgraph/drawio" rel="noopener">draw.io</a> (Apache-2.0)</li>
+    <li><a href="https://github.com/ranuts/document" rel="noopener">ranuts/document</a> and <a href="https://github.com/ONLYOFFICE" rel="noopener">ONLYOFFICE</a> editors (AGPL-3.0; source code is available at these links)</li>
+    <li>Liberation, Carlito and Caladea fonts (SIL Open Font License)</li>
+  </ul>
+  <p class="lead" style="font-size:.9rem">FoCT Virtual Labs was designed and developed by <b>Mr. Priya Raj Chanda</b>, Assistant Professor [CSE], Faculty of Computer Technology, Assam down town University. That includes the portal, the code IDE, FoCT NetSim, the SQL and MongoDB labs, the Lex &amp; Yacc integration, the compiler design tools, the SPICE simulator front end and the lab server.</p>
+</article>
+</div>
+</div>
+</body>
+</html>

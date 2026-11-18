@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MongoDB Lab &middot; FoCT Virtual Labs</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png">
+<link rel="stylesheet" href="/assets/css/foct.css">
+<link rel="stylesheet" href="mongo.css">
+<script type="module" src="/assets/js/foct.js"></script>
+</head>
+<body>
+<header class="foct-bar">
+  <a class="foct-home" href="/" title="Back to FoCT Virtual Labs">
+    <img src="/assets/brand/adtu-seal.png" alt="ADtU seal">
+    <span><span class="t1">FoCT Virtual Labs</span><span class="t2">Assam down town University</span></span>
+  </a>
+  <span class="foct-crumb">/</span>
+  <span class="foct-app-title">MongoDB Lab</span>
+  <div class="tb">
+    <button class="btn btn-ghost" id="btnNew" title="New script">New</button>
+    <button class="btn btn-ghost" id="btnOpen" title="Open a script (.js) from this computer (Ctrl+O)">Open</button>
+    <button class="btn btn-ghost" id="btnSave" title="Save the script to this computer (Ctrl+S)">Save</button>
+    <div class="menu-wrap">
+      <button class="btn btn-ghost" id="btnMenu" aria-haspopup="true">Samples &amp; examples &#9662;</button>
+      <div class="menu" id="menu" hidden>
+        <div class="menu-label">Load a sample database</div>
+        <div id="datasets"></div>
+        <hr>
+        <div class="menu-label">Example scripts</div>
+        <div id="examples"></div>
+        <hr>
+        <button data-cmd="help">Help and shell cheat sheet</button>
+        <button data-cmd="theme">Switch light / dark</button>
+      </div>
+    </div>
+  </div>
+  <span class="spacer"></span>
+  <span class="chip" id="engineChip"><span class="dot"></span><span id="engineText">Starting&hellip;</span></span>
+  <button class="btn btn-run" id="btnRun" title="Run the selection, or the whole script (Ctrl+Enter / F5)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12-7.5z"/></svg>Run</button>
+  <button class="btn btn-stop" id="btnStop" title="Stop: undoes the changes made by this run" hidden>Stop</button>
+</header>
+
+<main class="lab">
+  <aside class="schema" aria-label="Databases">
+    <div class="schema-head">
+      <strong>Databases</strong>
+      <span class="muted small" title="Kept in this browser on this computer">this PC</span>
+    </div>
+    <div class="schema-list" id="dbList"><p class="muted">Loading&hellip;</p></div>
+    <div class="schema-actions">
+      <button class="btn btn-sm" id="btnImport" title="Import documents from a JSON or CSV file into a collection">Import&hellip;</button>
+      <button class="btn btn-sm" id="btnExport" title="Export a collection as JSON or CSV">Export&hellip;</button>
+      <button class="btn btn-sm" id="btnDump" title="Save every database to one file on this computer">Save databases</button>
+      <button class="btn btn-sm" id="btnRestore" title="Open a file saved with Save databases">Open databases</button>
+      <button class="btn btn-sm btn-ghost" id="btnReset" title="Delete all databases in this browser">Delete all data</button>
+    </div>
+  </aside>
+  <section class="work">
+    <div id="editor" class="editor"></div>
+    <div class="hsplit" id="hsplit" role="separator" aria-orientation="horizontal" tabindex="0" title="Drag to resize"></div>
+    <div class="output-pane">
+      <div class="out-head">
+        <strong>Output</strong>
+        <span class="muted small">mongosh-style results, one per command</span>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost btn-sm" id="btnClear" title="Clear the output">Clear</button>
+      </div>
+      <div class="out" id="out" aria-live="polite"></div>
+      <div class="repl">
+        <span class="prompt" id="prompt">test&gt;</span>
+        <textarea id="replInput" rows="1" spellcheck="false" autocomplete="off"
+          placeholder="Type a command, e.g.  db.students.find()  and press Enter (Shift+Enter for a new line, &uarr; for history)"></textarea>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="statusbar">
+  <span id="status">Ready</span>
+  <span id="dbStatus">db: test</span>
+  <span class="spacer"></span>
+  <span id="cursor">Ln 1, Col 1</span>
+</footer>
+
+<script src="samples.js"></script>
+<script src="/vendor/monaco/vs/loader.js"></script>
+<script type="module" src="mongo.js"></script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPICE Simulator &middot; FoCT Virtual Labs</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png">
+<link rel="stylesheet" href="/assets/css/foct.css">
+<link rel="stylesheet" href="/runtimes/spice/uplot/uPlot.min.css">
+<link rel="stylesheet" href="spice.css">
+<script type="module" src="/assets/js/foct.js"></script>
+</head>
+<body>
+<header class="foct-bar">
+  <a class="foct-home" href="/" title="Back to FoCT Virtual Labs">
+    <img src="/assets/brand/adtu-seal.png" alt="ADtU seal">
+    <span><span class="t1">FoCT Virtual Labs</span><span class="t2">Assam down town University</span></span>
+  </a>
+  <span class="foct-crumb">/</span>
+  <span class="foct-app-title">SPICE Simulator</span>
+  <div class="tb">
+    <button class="btn btn-ghost" id="btnNew" title="New netlist">New</button>
+    <button class="btn btn-ghost" id="btnOpen" title="Open a netlist from this computer (Ctrl+O)">Open</button>
+    <button class="btn btn-ghost" id="btnSave" title="Save the netlist to this computer (Ctrl+S)">Save</button>
+    <div class="menu-wrap">
+      <button class="btn btn-ghost" id="btnMenu" aria-haspopup="true">Examples &#9662;</button>
+      <div class="menu" id="menu" hidden>
+        <div id="examples"></div>
+        <hr>
+        <button data-cmd="models">Built-in component models</button>
+        <button data-cmd="help">Help and LTspice tips</button>
+        <button data-cmd="theme">Switch light / dark</button>
+      </div>
+    </div>
+  </div>
+  <span class="spacer"></span>
+  <span class="chip" id="engineChip"><span class="dot"></span><span id="engineText">Starting ngspice&hellip;</span></span>
+  <button class="btn btn-run" id="btnRun" title="Simulate (Ctrl+Enter or F5)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12-7.5z"/></svg>Simulate</button>
+  <button class="btn btn-stop" id="btnStop" title="Stop the simulation" hidden>Stop</button>
+</header>
+
+<main class="lab">
+  <section class="left">
+    <div id="editor" class="editor"></div>
+  </section>
+  <div class="vsplit" id="vsplit" role="separator" aria-orientation="vertical" tabindex="0" title="Drag to resize"></div>
+  <section class="right">
+    <div class="rtabs" role="tablist">
+      <button class="rtab active" data-pane="plot" role="tab">Plot</button>
+      <button class="rtab" data-pane="data" role="tab">Data</button>
+      <button class="rtab" data-pane="log" role="tab">Log <span class="badge" id="logBadge" hidden>!</span></button>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost btn-sm" id="btnCsv" title="Download all results as CSV" disabled>CSV</button>
+      <button class="btn btn-ghost btn-sm" id="btnPng" title="Save the plot as a picture" disabled>PNG</button>
+    </div>
+    <div class="rbody">
+      <div data-pane="plot" class="plot-pane">
+        <div class="series" id="series"></div>
+        <div id="charts" class="charts"></div>
+      </div>
+      <div data-pane="data" class="data-pane" hidden><div id="dataTable"></div></div>
+      <pre data-pane="log" class="log" id="log" hidden></pre>
+    </div>
+  </section>
+</main>
+<footer class="statusbar">
+  <span id="status">Ready</span>
+  <span class="spacer"></span>
+  <span id="cursor">Ln 1, Col 1</span>
+</footer>
+
+<script src="/vendor/monaco/vs/loader.js"></script>
+<script type="module" src="spice.js"></script>
+</body>
+</html>
