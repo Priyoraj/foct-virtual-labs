@@ -133,6 +133,8 @@ To move the lab to another server, copy the whole folder (after setup) — no in
 ## Licences
 
 FoCT Virtual Labs code (portal, IDE, NetSim, SQL and MongoDB labs, Lex & Yacc integration, Compiler Design Tools, SPICE front end, server, tools) was designed and developed by Mr. Priya Raj Chanda, Assistant Professor [CSE], for ADtU FoCT.
+It is released under the [MIT License](LICENSE). The MIT License covers this code only.
+
 Third-party components keep their licences: Pyodide (MPL-2.0), JupyterLite/JupyterLab
 (BSD-3-Clause), LLVM/Clang (Apache-2.0 with LLVM exception), YoWASP packaging (ISC), JavaBox (MIT),
 OpenJDK (GPL-2.0 with Classpath Exception), TeaVM (Apache-2.0), Monaco (MIT), draw.io (Apache-2.0),
@@ -144,4 +146,5 @@ ranuts/document and ONLYOFFICE (AGPL-3.0; the modifications are the scripted pat
 Caladea fonts (SIL OFL 1.1). These components are not stored in this repository: `tools/setup.py`
 downloads them from their publishers.
 
-The Assam down town University name, seal and logo belong to the university.
+The Assam down town University name, seal and logo belong to the university and are not covered
+by the MIT License.
