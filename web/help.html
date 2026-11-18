@@ -11,7 +11,7 @@
 <style>
   body { background: var(--bg); }
   .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px 60px; }
-  .layout { display: grid; grid-template-columns: 220px 1fr; gap: 28px; margin-top: 24px; }
+  .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; margin-top: 24px; }
   nav.toc { position: sticky; top: 16px; align-self: start; font-size: .92rem; }
   nav.toc a { display: block; padding: 5px 10px; border-radius: 8px; color: var(--muted); text-decoration: none; }
   nav.toc a:hover { background: var(--navy-100); color: var(--text); }
@@ -20,14 +20,15 @@
   article h3 { margin: 22px 0 8px; font-size: 1.02rem; }
   article p, article li { color: var(--text); }
   article .lead { color: var(--muted); font-size: 1.05rem; }
-  table.feas { width: 100%; border-collapse: collapse; font-size: .92rem; background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+  .feas-wrap { overflow-x: auto; background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); }
+  table.feas { width: 100%; border-collapse: collapse; font-size: .92rem; }
   table.feas th, table.feas td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
   table.feas th { background: var(--surface-2); color: var(--muted); font-weight: 600; }
   .note { background: var(--gold-100); border: 1px solid var(--gold-600); border-radius: 12px; padding: 12px 16px; margin: 14px 0; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin: 12px 0; box-shadow: var(--shadow); }
   pre { background: #0f1222; color: #e6e8f5; padding: 12px 14px; border-radius: 10px; overflow: auto; font-size: .86rem; }
   .ok { color: var(--ok); font-weight: 700; } .part { color: var(--warn); font-weight: 700; } .no { color: var(--bad); font-weight: 700; }
-  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; } }
+  @media (max-width: 760px) { .layout { grid-template-columns: minmax(0, 1fr); } nav.toc { position: static; } }
 </style>
 </head>
 <body>
@@ -79,7 +80,7 @@
   </ul>
 
   <h2 id="apps">What each lab can do</h2>
-  <table class="feas">
+  <div class="feas-wrap"><table class="feas">
     <tr><th>Lab</th><th>Runs on</th><th>Good for</th><th>Not available</th></tr>
     <tr><td><b>C</b></td><td>Clang 22 compiled to WebAssembly</td><td>C89&ndash;C23, <code>scanf</code>/<code>printf</code>, files, pointers, structures, <code>math.h</code>, <code>time.h</code>. Turbo&nbsp;C habits such as <code>conio.h</code> (<code>getch</code>, <code>clrscr</code>), <code>gets</code> and <code>system("cls")</code> also work.</td><td><code>graphics.h</code>, threads, sockets, <code>fork</code>.</td></tr>
     <tr><td><b>C++</b></td><td>Clang 22 + libc++</td><td>C++11&ndash;C++23, classes, inheritance, templates, STL, exceptions (<code>try</code>/<code>catch</code>/<code>throw</code>), <code>bits/stdc++.h</code>, file streams.</td><td>Threads, <code>graphics.h</code>.</td></tr>
@@ -95,7 +96,7 @@
     <tr><td><b>Diagrams</b></td><td>draw.io (self-hosted, offline)</td><td>Flowcharts, UML, ER, DFD, network diagrams; export PNG/SVG/PDF.</td><td>Cloud storage (Google Drive etc.) is switched off.</td></tr>
     <tr><td><b>Network simulator</b></td><td>FoCT NetSim (built for this lab)</td><td>PCs, servers, switches, hubs, routers; IPv4 addressing, subnet masks, default gateways, static routes; ARP, switching, ICMP <code>ping</code>/<code>tracert</code>; step-by-step packet view.</td><td>VLANs, DHCP, DNS, TCP/UDP services, Cisco IOS.</td></tr>
     <tr><td><b>Office</b></td><td>ONLYOFFICE editors in WebAssembly</td><td>Word, Excel and PowerPoint files (<code>.docx</code>, <code>.xlsx</code>, <code>.pptx</code>): formatting, tables, formulas, charts, slides; save as PDF.</td><td>Real-time co-editing, macros. Needs a PC with 4&nbsp;GB+ RAM.</td></tr>
-  </table>
+  </table></div>
 
   <h2 id="secure">Secure mode (HTTPS)</h2>
   <p>The labs work over plain <code>http://</code>. Opening them over <code>https://</code> with the lab certificate (<b>secure mode</b>) adds:</p>
@@ -154,12 +155,13 @@ python server/serve.py --https    (also serve secure mode on port 8443)</pre>
     <li><a href="https://graphviz.org" rel="noopener">Graphviz</a> (EPL) through <a href="https://github.com/mdaines/viz-js" rel="noopener">viz.js</a> (MIT)</li>
     <li><a href="https://github.com/sql-js/sql.js" rel="noopener">sql.js</a> (MIT) with <a href="https://sqlite.org" rel="noopener">SQLite</a> (public domain), and <a href="https://pglite.dev" rel="noopener">PGlite</a> (Apache-2.0 / PostgreSQL Licence)</li>
     <li><a href="https://ngspice.sourceforge.io" rel="noopener">ngspice</a> (BSD-3-Clause and others) via <a href="https://github.com/eelab-dev/EEcircuit-engine" rel="noopener">EEcircuit-engine</a> (MIT), and <a href="https://github.com/leeoniya/uPlot" rel="noopener">uPlot</a> (MIT)</li>
-    <li><a href="https://www.falstad.com/circuit/" rel="noopener">CircuitJS</a> by Paul Falstad and Iain Sharp (GPL-2.0; <a href="https://github.com/pfalstad/circuitjs1" rel="noopener">source code</a>)</li>
+    <li><a href="https://www.falstad.com/circuit/" rel="noopener">CircuitJS</a> by Paul Falstad and Iain Sharp (GPL-2.0; <a href="https://github.com/pfalstad/circuitjs1" rel="noopener">source code</a>; <a href="https://github.com/Priyoraj/foct-virtual-labs/blob/main/tools/setup.py" rel="noopener">FoCT&rsquo;s changes</a>)</li>
     <li><a href="https://github.com/jgraph/drawio" rel="noopener">draw.io</a> (Apache-2.0)</li>
-    <li><a href="https://github.com/ranuts/document" rel="noopener">ranuts/document</a> and <a href="https://github.com/ONLYOFFICE" rel="noopener">ONLYOFFICE</a> editors (AGPL-3.0; source code is available at these links)</li>
+    <li><a href="https://github.com/ranuts/document" rel="noopener">ranuts/document</a> and <a href="https://github.com/ONLYOFFICE" rel="noopener">ONLYOFFICE</a> editors (AGPL-3.0; source code is available at these links; <a href="https://github.com/Priyoraj/foct-virtual-labs/blob/main/tools/setup.py" rel="noopener">FoCT&rsquo;s changes</a>: English interface, FoCT branding, blank templates, open fonts)</li>
     <li>Liberation, Carlito and Caladea fonts (SIL Open Font License)</li>
   </ul>
   <p class="lead" style="font-size:.9rem">FoCT Virtual Labs was designed and developed by <b>Mr. Priya Raj Chanda</b>, Assistant Professor [CSE], Faculty of Computer Technology, Assam down town University. That includes the portal, the code IDE, FoCT NetSim, the SQL and MongoDB labs, the Lex &amp; Yacc integration, the compiler design tools, the SPICE simulator front end and the lab server.</p>
+  <p class="lead" style="font-size:.9rem">Source code: <a href="https://github.com/Priyoraj/foct-virtual-labs" rel="noopener">github.com/Priyoraj/foct-virtual-labs</a> (MIT License).</p>
 </article>
 </div>
 </div>
