@@ -33,6 +33,15 @@ The server only **sends files**. Compiling and running happen inside each studen
 (WebAssembly), so one ordinary PC can serve a whole lab: no per-student CPU or memory, no
 sandboxing worries, no containers. The browser caches the runtimes after the first visit.
 
+After the first visit, opening a lab asks the server only for its pages and FoCT's own small
+files. Runtime files are fetched again only after `tools/setup.py` installs a new version.
+
+For a 90-PC lab, put the server on a wired gigabit port of the lab's main switch, not Wi-Fi. On a
+PC's first visit a lab downloads up to 50 MB (C 29 MB, C++ 39 MB, Python 21 MB, Jupyter 49 MB,
+Office 19 MB). If 90 PCs open Jupyter for the first time together, this takes about 40 seconds on
+gigabit. In a test, the server sent 90 simultaneous clients about 885 MB/s, so the network is the
+limit, not the server.
+
 ## Requirements
 
 * **Server:** any Windows/Linux/macOS PC on the lab network with **Python 3.8+**. The lab itself
@@ -129,6 +138,11 @@ To move the lab to another server, copy the whole folder (after setup) — no in
 * The JavaBox prebuilt files come from the author's demo site (no versioned release). `setup.py`
   checks them against the SHA-256 of the tested build and warns if they change.
 * `/__status` on the server shows active PCs, requests and data sent.
+* Caching (`server/serve.py`):
+  * Pages and FoCT's own files are revalidated on every visit, so edits show at once.
+  * Files in the folders setup manages are kept by browsers for 30 days without asking: `runtimes/`, `vendor/` and `apps/notebook|office|drawio|circuit/`.
+  * Every page sets a `foct_rt` cookie, a hash of the `.foct-version` markers. Those files are sent with `Vary: Cookie`, so when setup installs a new version, browsers fetch the new files instead of mixing versions.
+  * If you hand-edit a file inside those folders, add it to `OWN_IN_MANAGED`.
 
 ## Licences
 

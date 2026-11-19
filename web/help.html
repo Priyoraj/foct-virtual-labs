@@ -125,7 +125,7 @@
 
   <h2 id="trouble">Troubleshooting</h2>
   <ul>
-    <li><b>A lab is slow the first time:</b> the browser downloads the compiler or Python once (C/C++ about 30&nbsp;MB, Python 10&nbsp;MB plus packages, Java 7&nbsp;MB or 80&nbsp;MB for full Java, Office about 60&nbsp;MB, PostgreSQL 5&nbsp;MB, SPICE 6&nbsp;MB, diagrams 0.5&nbsp;MB). The first Lex &amp; Yacc run on a PC builds lex and yacc (about 20&nbsp;seconds). Later visits use the browser cache.</li>
+    <li><b>A lab is slow the first time:</b> the browser downloads the compiler or Python once (C about 30&nbsp;MB, C++ 40&nbsp;MB, Python 20&nbsp;MB with NumPy and Matplotlib, Jupyter 50&nbsp;MB, Java 6&nbsp;MB or 54&nbsp;MB for full Java, Office 19&nbsp;MB, SPICE and diagrams 7&nbsp;MB each, SQL and MongoDB 2&nbsp;MB, PostgreSQL 5&nbsp;MB more). The first Lex &amp; Yacc run on a PC builds lex and yacc (about 20&nbsp;seconds). Later visits use the browser cache.</li>
     <li><b>&ldquo;Update browser&rdquo; on the home page:</b> use a current Chrome, Edge or Firefox (2024 or newer).</li>
     <li><b>The program waits forever:</b> it is probably waiting for input &mdash; type in the Output panel. Use <b>Stop</b> to end a program that loops forever.</li>
     <li><b>Out of memory / blank page:</b> close other tabs; the Office and Java labs need a PC with at least 4&nbsp;GB of RAM.</li>
@@ -139,6 +139,14 @@
 ./start-server.sh           (Linux / macOS)
 python server/serve.py --https    (also serve secure mode on port 8443)</pre>
     <p>The window shows the addresses to give to students. Allow the program through the firewall when Windows asks (or run <code>server\allow-firewall.bat</code> as administrator). The server needs very little CPU: all compiling and running happens on the students&rsquo; PCs. Live statistics: <a href="/__status">/__status</a>.</p>
+    <p><b>Large labs (for example 90 PCs):</b> one ordinary PC is enough as the server. In a test it sent the C compiler to 90 clients at once at about 885&nbsp;MB/s, far more than a gigabit network can carry, so the network is what matters.</p>
+    <ul>
+      <li>Connect the server to the lab&rsquo;s main switch with a cable at 1&nbsp;Gbps. Do not use Wi-Fi.</li>
+      <li>On a PC&rsquo;s first visit a lab downloads up to 50&nbsp;MB. If 90 PCs open Jupyter for the first time together, this takes about 40&nbsp;seconds on gigabit, or several minutes at 100&nbsp;Mbit/s.</li>
+      <li>After that, browsers keep the runtimes for 30&nbsp;days. Opening a lab again needs only a few small requests.</li>
+      <li>Runtimes are downloaded again only after <code>tools/setup.py</code> installs a new version.</li>
+      <li>After the PCs are re-imaged, open each lab once on every PC before class.</li>
+    </ul>
   </div>
 
   <h2 id="credits">Open-source credits</h2>

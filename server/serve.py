@@ -15,6 +15,7 @@ Only the Python 3.8+ standard library is needed.
 import argparse
 import datetime
 import email.utils
+import hashlib
 import http.server
 import json
 import os
@@ -57,6 +58,40 @@ MIME = {
 
 # Apps that load third-party pages/frames and must not be cross-origin isolated.
 NOT_ISOLATED = ("/apps/drawio/", "/apps/office/")
+
+# Third-party folders installed by tools/setup.py. Each has a .foct-version marker, and their
+# files only change when setup installs a new version, so browsers may keep them (see send_file).
+MANAGED = ("/runtimes/", "/vendor/", "/apps/notebook/", "/apps/office/", "/apps/drawio/", "/apps/circuit/")
+# FoCT's own files inside those folders: edited by hand, so always revalidated.
+OWN_IN_MANAGED = ("/runtimes/javabox/host.html", "/runtimes/javabox/host.js", "/runtimes/javabox/FoctServer.java")
+RT_COOKIE = "foct_rt"
+RT_MAX_AGE = 30 * 24 * 3600
+
+
+class RuntimeGeneration:
+    """A short hash of every .foct-version marker; it changes whenever tools/setup.py installs or
+    updates a third-party component. Re-read at most every 5 seconds."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.root, self.checked, self.value = None, -1e9, ""
+
+    def get(self, root):
+        now = time.monotonic()
+        if root != self.root or now - self.checked > 5:
+            with self.lock:
+                if root != self.root or now - self.checked > 5:
+                    h = hashlib.sha1()
+                    for m in sorted(root.glob("*/*/.foct-version")):
+                        try:
+                            h.update(m.relative_to(root).as_posix().encode() + b"\0" + m.read_bytes() + b"\0")
+                        except OSError:
+                            pass
+                    self.root, self.checked, self.value = root, now, h.hexdigest()[:12]
+        return self.value
+
+
+GENERATION = RuntimeGeneration()
 
 
 class Stats:
@@ -168,9 +203,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         etag = f'W/"{int(st.st_mtime)}-{st.st_size}-{encoding or "id"}"'
         last_mod = email.utils.formatdate(st.st_mtime, usegmt=True)
+        caching = self.caching_headers(path, ctype)
         if self.not_modified(etag, st.st_mtime):
             self.send_response(304)
             self.send_header("ETag", etag)
+            for name, value in caching:
+                self.send_header(name, value)
             self.common_headers(path)
             self.send_header("Content-Length", "0")
             self.end_headers()
@@ -182,11 +220,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(sst.st_size))
         self.send_header("Last-Modified", last_mod)
         self.send_header("ETag", etag)
-        self.send_header("Vary", "Accept-Encoding")
         if encoding:
             self.send_header("Content-Encoding", encoding)
-        # Always revalidate (a cheap 304 on the LAN), so updated runtimes are never mixed with stale ones.
-        self.send_header("Cache-Control", "no-cache")
+        for name, value in caching:
+            self.send_header(name, value)
         if target.suffix.lower() in (".crt", ".cer"):
             self.send_header("Content-Disposition", f'attachment; filename="{target.name}"')
         self.common_headers(path)
@@ -204,6 +241,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, socket.timeout):
                 self.close_connection = True
         STATS.add(self.client_address[0], sent)
+
+    def caching_headers(self, path, ctype):
+        """Pages and FoCT's own files are revalidated on every visit (a cheap 304), so edits show
+        at once. Third-party runtime files are kept by the browser for 30 days without asking,
+        which spares the server thousands of requests when a whole lab opens Jupyter at once.
+        They are tied to the runtime generation: every page sets it as a cookie, and the files
+        are cached with "Vary: Cookie". After setup installs a new version the cookie changes,
+        the cached copies stop matching, and browsers fetch the new files, never a mix."""
+        gen = GENERATION.get(self.web_root)
+        if ctype.startswith("text/html"):
+            return [("Cache-Control", "no-cache"), ("Vary", "Accept-Encoding"),
+                    ("Set-Cookie", f"{RT_COOKIE}={gen}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly")]
+        if path.startswith(MANAGED) and path not in OWN_IN_MANAGED:
+            # Without the current cookie (first visit, cookies blocked) fall back to revalidating.
+            keep = self.cookie(RT_COOKIE) == gen
+            return [("Cache-Control", f"max-age={RT_MAX_AGE}" if keep else "no-cache"),
+                    ("Vary", "Accept-Encoding, Cookie")]
+        return [("Cache-Control", "no-cache"), ("Vary", "Accept-Encoding")]
+
+    def cookie(self, name):
+        for part in self.headers.get("Cookie", "").split(";"):
+            key, _, value = part.strip().partition("=")
+            if key == name:
+                return value
+        return None
 
     def not_modified(self, etag, mtime):
         inm = self.headers.get("If-None-Match")
