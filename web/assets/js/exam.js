@@ -78,10 +78,26 @@
   const PAGE_LAB = labOf(location.pathname, location.search);
   const labAllowed = (lab) => !lab || !S().labs || S().labs.includes(lab);
 
+  // The exam helper (exam-helper.vbs) opens the exam in its own full-screen Edge with ?foctk=<key>;
+  // the key shows the server that this is the helper's browser (needed to sign in).
+  const KKEY = "foct.exam.kiosk";
+  if (isTop) {
+    try {
+      const u = new URL(location.href);
+      const k = u.searchParams.get("foctk");
+      if (k) { ls.set(KKEY, k); u.searchParams.delete("foctk"); history.replaceState(history.state, "", u); }
+    } catch { /* old browser */ }
+  }
+  const kioskKey = () => ls.get(KKEY) || "";
+  let agent = { ok: true, ready: true, kiosk: true, problem: "" };
+  const helperOk = () => !(state.opts && state.opts.helper) || (agent.ok && agent.ready && agent.kiosk);
+
   async function poll() {
     const token = me ? me.token : null;
+    const headers = { "X-FoCT-Kiosk": kioskKey() };
+    if (token) headers["X-FoCT-Token"] = token;
     try {
-      const r = await fetch("/__exam", { cache: "no-store", headers: token ? { "X-FoCT-Token": token } : {} });
+      const r = await fetch("/__exam", { cache: "no-store", headers });
       if (r.ok) apply(await r.json(), token);
     } catch { /* server not reachable: keep the last state */ }
   }
@@ -99,13 +115,14 @@
     if (me && token === me.token && state.on && state.register && !s.you) { ls.del(meKey()); me = null; }   // the server no longer knows us
     if (me && s.you) { me.saved = s.you.saved; serverLock = s.you.locked || null; }
     if (!state.on) { serverLock = localLock = null; }
+    agent = s.agent || { ok: true, ready: true, kiosk: true, problem: "" };
     render();
     if (isTop && wasOn !== state.on) {
       toast(state.on ? "Exam mode is on: copy and paste are turned off." : "Exam mode has ended.");
     }
     if (!isTop) return;
     if (state.on && state.timeup && !wasUp) toast("Time is up.");
-    if (state.on && state.register && !me && !state.timeup && labAllowed(PAGE_LAB)) signIn();
+    if (state.on && state.register && !me && !state.timeup && labAllowed(PAGE_LAB) && helperOk()) signIn();
     else closeSignIn();
     if (collecting()) {
       const k = `foct.exam.collected.${state.id}`;
@@ -635,6 +652,20 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
       return { kind: "timeup", title: "Time is up",
                text: me ? "Your work has been sent to your teacher. You can stop now." : "The time for this exam is over." };
     }
+    if (state.opts && state.opts.helper) {
+      if (!agent.ok) {
+        return { kind: "helper", title: "Run the exam helper first", download: true,
+                 text: "This exam needs the FoCT exam helper on this PC. Open “FoCT exam helper” (your teacher may have put it on the desktop), "
+                     + "or download it below and open it. It closes other programs and opens the exam in its own full-screen window." };
+      }
+      if (!agent.ready) {
+        return { kind: "helper", title: "The exam helper is starting", text: agent.problem || "Wait a moment; the exam opens in its own full-screen window." };
+      }
+      if (!agent.kiosk) {
+        return { kind: "kiosk", title: "Use the exam window",
+                 text: "The exam helper has opened the exam in its own full-screen window. Close this browser and use that one." };
+      }
+    }
     if (state.register && !me) return null;               // the sign-in card shows instead
     const L = currentLock();
     if (L) {
@@ -659,7 +690,8 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
       curtainEl.dataset.sig = sig;
       curtainEl.innerHTML = `<div class="card"><div class="k">Exam &middot; ${esc(state.title || "FoCT Virtual Labs")}</div>
         <h2>${esc(c.title)}</h2><p>${esc(c.text)}</p>
-        ${c.button ? `<button type="button">${esc(c.button)}</button>` : ""}${c.home ? '<a class="btn" href="/">Back to the labs</a>' : ""}</div>`;
+        ${c.button ? `<button type="button">${esc(c.button)}</button>` : ""}${c.home ? '<a class="btn" href="/">Back to the labs</a>' : ""}
+        ${c.download ? '<a class="btn" href="/exam-helper.vbs">Download the exam helper</a>' : ""}</div>`;
       const b = curtainEl.querySelector("button");
       if (b) b.onclick = () => { document.documentElement.requestFullscreen().catch(() => toast("Press F11 or allow full screen.")); };
       setTimeout(() => { const f = curtainEl && curtainEl.querySelector("button, a"); if (f) f.focus(); }, 0);
@@ -806,7 +838,7 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
       err.textContent = "";
       try {
         const r = await fetch("/__exam/register", { method: "POST", headers: { "Content-Type": "application/json" },
-                                                     body: JSON.stringify({ exam: state.id, name, enrolment, code }) });
+                                                     body: JSON.stringify({ exam: state.id, name, enrolment, code, kiosk: kioskKey() }) });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error || "Could not sign in. Ask your teacher.");
         // What is already in this browser does not count as this exam's work.

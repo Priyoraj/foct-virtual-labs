@@ -132,6 +132,8 @@
     <li><b>Lost work:</b> open the same lab on the same PC and browser: the last draft is restored automatically.</li>
     <li><b>Copy and paste do not work and the page has a red &ldquo;EXAM MODE&rdquo; frame:</b> the lab is in exam mode. Your teacher ends it after the exam, and the page returns to normal by itself.</li>
     <li><b>&ldquo;Exam paused on this PC&rdquo;:</b> the exam found the developer tools open or a protection changed, you left the exam window too often, or your teacher paused you. Close the developer tools and undo any changes; the page unlocks by itself when everything is normal, or your teacher lets you back in. Work you did before is safe.</li>
+    <li><b>&ldquo;Run the exam helper first&rdquo;:</b> this exam needs the FoCT exam helper. Open <i>FoCT exam helper</i> on the desktop, or download it from the page and open it (choose <i>Keep</i> and <i>Run</i> if Windows asks). It closes other programs, so save your work in them first, and then opens the exam in its own full-screen window. Your PC goes back to normal when the exam ends.</li>
+    <li><b>&ldquo;Use the exam window&rdquo;:</b> the exam helper has already opened the exam in its own full-screen window; use that one.</li>
     <li><b>&ldquo;This lab is not part of the exam&rdquo;:</b> your teacher chose which labs can be used; go back to the home page and open one of those.</li>
     <li><b>The page asks for your name and enrolment no.:</b> an exam is starting. Type them carefully; they name the folder your teacher receives. Your work in the labs, and every file you save or download, then goes to your teacher by itself. To hand in any other file, for example one from your Downloads folder, use <b>Submit files</b> in the red bar.</li>
   </ul>
@@ -171,6 +173,15 @@ python server/serve.py --https    (also serve secure mode on port 8443)</pre>
       <li><b>Tamper lock:</b> if a page finds developer tools open, or a protection removed, that PC is paused until everything is back to normal, or until you let the student back in.</li>
       <li>You can also lock a student yourself and send a message to every screen. Every alert is listed per student and saved in the zip (incidents.csv).</li>
     </ul>
+    <p><b>Exam helper for Windows PCs</b> (optional): students run <code>exam-helper.vbs</code> on their PC before they can start. Download it from the control page and copy it to the PCs. It needs no administrator rights. While the exam runs, it:</p>
+    <ul>
+      <li>closes other programs and keeps them closed;</li>
+      <li>opens the exam in its own full-screen Edge window, with no address bar and no internet;</li>
+      <li>turns off Task Manager and the clipboard history;</li>
+      <li>reports USB drives (optionally pausing the exam until the drive is removed) and a second screen;</li>
+      <li>with administrator rights, also turns off developer tools and blocks USB drives.</li>
+    </ul>
+    <p>The server gives the labs only to PCs whose helper is running, and only in the helper&rsquo;s window. The PC goes back to normal when you end the exam, or at the next sign-in if it restarts.</p>
     <p>Press <b>Collect work and end exam</b> afterwards. Only the server PC can switch exam mode or download submissions, and exam mode stays on if the server restarts. It stops casual copying. For strict exams, also turn off the browser&rsquo;s developer tools with the Edge or Chrome policy <i>DeveloperToolsAvailability</i>&nbsp;=&nbsp;2.</p>
   </div>
 

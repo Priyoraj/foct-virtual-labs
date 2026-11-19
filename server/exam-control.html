@@ -112,6 +112,20 @@
       <label class="check"><input type="checkbox" id="fullscreen"><span><b>Require full screen</b> <span class="muted">(leaving it pauses the exam on that PC until the student returns)</span></span></label>
       <label class="f" for="allow">Only these PCs may sign in <span class="muted">(optional, e.g. 192.168.1.20-192.168.1.110, 10.0.5.0/24)</span></label>
       <input type="text" id="allow" placeholder="any PC on the lab network">
+
+      <h3>Exam helper for Windows PCs</h3>
+      <label class="check"><input type="checkbox" id="helper"><span><b>Students must run the exam helper</b> on their PC before they can start.
+        It closes other programs, opens the exam full screen in Edge with no address bar and no internet, and keeps watch until the exam ends.
+        The PC goes back to normal when you end the exam, or when it restarts.
+        <a href="/exam-helper.vbs" id="helperLink">Download exam-helper.vbs</a> <span class="muted">to put on the PCs&rsquo; desktops (students can also download it from the exam page).</span></span></label>
+      <div id="helperOpts" style="margin-left: 26px">
+        <label class="check"><input type="checkbox" id="helper_taskmgr" checked><span>Turn off Task Manager and the clipboard history during the exam</span></label>
+        <label class="check"><input type="checkbox" id="helper_admin" checked><span>If the PC&rsquo;s account has administrator rights: turn off developer tools in Edge and Chrome, and block USB drives <span class="muted">(the PC shows its usual &ldquo;allow changes&rdquo; prompt)</span></span></label>
+        <div class="row" style="margin-top: 4px"><label for="helper_usb">When a USB drive is connected:</label>
+          <select id="helper_usb"><option value="pause">pause the exam on that PC until it is removed</option><option value="note">only note it here</option></select></div>
+        <label class="f" for="helper_kill">Programs to close and keep closed <span class="links"><button type="button" id="killDefault">default list</button></span></label>
+        <textarea id="helper_kill" spellcheck="false"></textarea>
+      </div>
     </details>
 
     <div class="row">
@@ -134,6 +148,7 @@
       <button class="dl" id="download">Download submissions (.zip)</button>
       <span id="msg" class="muted"></span>
     </div>
+    <div class="muted" id="helperPcs"></div>
     <div class="scroll">
       <table>
         <thead><tr><th>#</th><th>Name</th><th>Enrolment no.</th><th>PC</th><th>Signed in</th><th>Work received</th><th>Files</th><th>Alerts</th><th>Status</th><th></th></tr></thead>
@@ -181,7 +196,9 @@ function readForm() {
     minutes: +$("minutes").value || 0, labs, allow: $("allow").value.trim(),
     opts: { block_open: $("block_open").checked, block_keys: $("block_keys").checked, tamper_lock: $("tamper_lock").checked,
             unlock: document.querySelector("input[name=unlock]:checked").value, leave: $("leave").value,
-            leave_limit: +$("leave_limit").value || 3, fullscreen: $("fullscreen").checked },
+            leave_limit: +$("leave_limit").value || 3, fullscreen: $("fullscreen").checked,
+            helper: $("helper").checked, helper_taskmgr: $("helper_taskmgr").checked, helper_admin: $("helper_admin").checked,
+            helper_usb: $("helper_usb").value, helper_kill: $("helper_kill").value },
   };
 }
 function fillForm(e) {
@@ -196,6 +213,20 @@ function fillForm(e) {
   document.querySelector(`input[name=unlock][value=${o.unlock === "teacher" ? "teacher" : "auto"}]`).checked = true;
   $("leave").value = o.leave || "log";
   $("leave_limit").value = o.leave_limit || 3;
+  for (const k of ["helper", "helper_taskmgr", "helper_admin"]) $(k).checked = !!o[k];
+  $("helper_usb").value = o.helper_usb === "note" ? "note" : "pause";
+  $("helper_kill").value = o.helper_kill || "";
+}
+$("killDefault").onclick = () => { if (info) { $("helper_kill").value = info.helper_kill; dirty = true; } };
+$("helper").addEventListener("input", () => { $("helperOpts").style.opacity = $("helper").checked ? 1 : .55; });
+
+function helperCell(h) {
+  if (!h) return "";
+  if (!h.running) return '<span class="pill bad" title="The exam helper is not running on this PC">helper off</span>';
+  const parts = [h.ready ? "ready" : "starting", h.taskmgr ? "Task Manager off" : "", h.devtools ? "developer tools off" : "",
+                 h.usbblock ? "USB blocked" : "", h.usb ? `USB drive: ${h.usb}` : "", h.screens > 1 ? `${h.screens} screens` : "",
+                 h.problem || ""].filter(Boolean).join(" · ");
+  return `<span class="pill ${h.ready && !h.usb ? "ok" : "warn"}" title="${esc(parts)}">helper</span>`;
 }
 
 function show(data) {
@@ -219,6 +250,8 @@ function show(data) {
   $("msgCard").hidden = !e.on;
   $("msgState").textContent = e.message ? `Shown since ${time(e.message.at)}` : "";
   if (e.on && !dirty) fillForm(e);
+  if (!$("helper_kill").value) $("helper_kill").value = data.helper_kill || "";
+  $("helperOpts").style.opacity = $("helper").checked ? 1 : .55;
   tick();
   const hasSubs = !!data.folder;
   $("subs").hidden = !hasSubs;
@@ -237,10 +270,13 @@ function show(data) {
       <td>${s.files ? `${s.files} (${s.kb} KB)` : ""}</td>
       <td class="alerts">${s.locked ? `<b>${esc(s.locked.reason)}</b><br>` : ""}${s.alerts.map(esc).join("<br>")}
           ${s.events.length ? `<br><button class="sm plain" data-ev="${esc(s.folder)}">${open.has(s.folder) ? "hide" : "details"}</button>` : ""}${evs}</td>
-      <td>${st}${s.twice ? ' <span class="pill warn" title="The same enrolment no. signed in on more than one PC">2 PCs</span>' : ""}</td>
+      <td>${st} ${e.on ? helperCell(s.helper) : ""}${s.twice ? ' <span class="pill warn" title="The same enrolment no. signed in on more than one PC">2 PCs</span>' : ""}</td>
       <td>${btn}</td></tr>`;
   });
   $("rows").innerHTML = rows.join("") || '<tr><td colspan="10" class="muted">No student has signed in yet.</td></tr>';
+  const waiting = (data.helper_pcs || []).map((p) => p.ip);
+  $("helperPcs").textContent = e.on && e.opts && e.opts.helper && waiting.length
+    ? `Exam helper running, nobody signed in yet: ${waiting.join(", ")}` : "";
 }
 
 function tick() {

@@ -106,6 +106,7 @@ from exam_mode import ExamMode  # noqa: E402
 
 EXAM_FILE = Path(__file__).resolve().parent / "exam-state.json"
 EXAM_CONTROL = Path(__file__).resolve().parent / "exam-control.html"
+EXAM_HELPER = Path(__file__).resolve().parent / "exam-helper.vbs"
 SUBMISSIONS = ROOT / "submissions"
 EXAM_TAG = b'<script src="/assets/js/exam.js"></script>'
 EXAM_TAG_VERSION = "x1"   # change with EXAM_TAG so browsers replace pages they cached with the old tag
@@ -189,7 +190,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                  "/__exam/time": self.exam_time, "/__exam/message": self.exam_message,
                  "/__exam/lock": self.exam_lock, "/__exam/register": self.exam_register,
                  "/__exam/upload": self.exam_upload, "/__exam/done": self.exam_done,
-                 "/__exam/event": self.exam_event, "/__exam/ok": self.exam_ok}.get(path)
+                 "/__exam/event": self.exam_event, "/__exam/ok": self.exam_ok,
+                 "/__exam/agent/hello": self.agent_hello, "/__exam/agent/beat": self.agent_beat,
+                 "/__exam/agent/bye": self.agent_bye}.get(path)
         if route:
             return route()
         self.deny()
@@ -207,10 +210,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = json.dumps(dict(self.info, **STATS.snapshot(), version=VERSION,
                                    secure=isinstance(self.connection, ssl.SSLSocket)), indent=1)
             return self.send_simple(200, body, "application/json; charset=utf-8", head=head)
+        if path == "/exam-helper.vbs":
+            return self.send_helper(head)
         if path == "/__exam":
             token = self.headers.get("X-FoCT-Token")
             you = EXAM.seen(token, self.client_address[0])
-            body = json.dumps(dict(EXAM.public(), client=self.client_address[0], now=time.time(), you=you))
+            agent = EXAM.client_agent(self.client_address[0], self.headers.get("X-FoCT-Kiosk", ""), self.is_loopback())
+            body = json.dumps(dict(EXAM.public(), client=self.client_address[0], now=time.time(), you=you, agent=agent))
             cookie = [("Set-Cookie", student_cookie(token))] if you and self.cookie(ST_COOKIE) != token else []
             return self.send_simple(200, body, "application/json; charset=utf-8", head=head, extra=cookie)
         if path.startswith("/__exam/"):
@@ -243,7 +249,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send_simple(404, "Not found", head=head, page=True)
         if not self.is_loopback():                    # the server PC itself is never held back
             page = MIME.get(target.suffix.lower(), "").startswith("text/html") and self.wants_page()
-            denied = EXAM.gate(self.cookie(ST_COOKIE), path, url.query, page)
+            denied = EXAM.gate(self.cookie(ST_COOKIE), path, url.query, page, self.client_address[0])
             if denied:
                 if page:
                     return self.send_not_in_exam(head)
@@ -470,6 +476,61 @@ class Handler(http.server.BaseHTTPRequestHandler):
             print(f"{time.strftime('%H:%M')}  LOCKED: {r['who']} - {r['locked']['reason']}", flush=True)
         self.reply_json({"locked": r["locked"]})
 
+    # ------------------------------------------------------------ exam helper (server/exam-helper.vbs on the PCs)
+    def server_url(self):
+        """The address a lab PC uses for this server (the LAN address when the page was opened on this PC)."""
+        host = (self.headers.get("Host") or "").strip()
+        name = host.rsplit(":", 1)[0].strip("[]").lower()
+        if not host or name in ("localhost", "127.0.0.1", "::1") or name.startswith("127."):
+            ips = self.info.get("lan_ips") or ["127.0.0.1"]
+            return f"http://{ips[0]}:{self.info.get('http_port', 8080)}"
+        scheme = "https" if isinstance(self.connection, ssl.SSLSocket) else "http"
+        return f"{scheme}://{host}"
+
+    def send_helper(self, head):
+        try:
+            text = EXAM_HELPER.read_text(encoding="utf-8")
+        except OSError:
+            return self.send_simple(404, "Not found", head=head, page=True)
+        text = text.replace("__FOCT_SERVER__", self.server_url()).replace("\r\n", "\n").replace("\n", "\r\n")
+        body = text.encode("ascii", "replace")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Disposition", 'attachment; filename="FoCT exam helper.vbs"')
+        self.send_header("Cache-Control", "no-store")
+        self.common_headers("/")
+        self.end_headers()
+        if not head:
+            self.wfile.write(body)
+        STATS.add(self.client_address[0], len(body))
+
+    def agent_hello(self):
+        try:
+            data = self.read_json()
+            self.reply_json(dict(EXAM.agent_hello(self.client_address[0], data), ok=True))
+        except PermissionError as e:
+            self.reply_json({"ok": False, "error": str(e)})
+        except (ValueError, TypeError):
+            self.refuse(400, "bad request")
+        else:
+            print(f"{time.strftime('%H:%M')}  exam helper started on {self.client_address[0]}", flush=True)
+
+    def agent_beat(self):
+        try:
+            data = self.read_json(8192)
+            self.reply_json(EXAM.agent_beat(str(data.get("token", "")), data.get("status") or {}))
+        except (ValueError, TypeError, AttributeError):
+            self.refuse(400, "bad request")
+
+    def agent_bye(self):
+        try:
+            data = self.read_json()
+            EXAM.agent_bye(str(data.get("token", "")), data.get("reason", ""))
+        except (ValueError, TypeError):
+            return self.refuse(400, "bad request")
+        self.reply_json({"ok": True})
+
     def exam_ok(self):
         if int(self.headers.get("Content-Length") or 0):
             self.rfile.read(min(int(self.headers["Content-Length"]), 4096))
@@ -486,7 +547,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             data = self.read_json()
             token, rec = EXAM.register(data.get("exam"), data.get("name"), data.get("enrolment"), data.get("code"),
-                                       self.client_address[0])
+                                       self.client_address[0], data.get("kiosk", ""))
         except PermissionError as e:
             return self.refuse(409, str(e))
         except (ValueError, TypeError) as e:

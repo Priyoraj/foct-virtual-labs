@@ -56,18 +56,35 @@ NEEDS = [   # URL prefix -> the labs that use it (first match wins)
     ("/runtimes/sql/", {"sql"}), ("/runtimes/mongo/", {"mongo"}), ("/runtimes/viz/", {"cdtools"}),
     ("/runtimes/spice/", {"spice"}),
 ]
+AGENT_STALE = 20                       # seconds without a beat before a PC's exam helper counts as stopped
+# Programs the exam helper closes (and keeps closed) on the student's PC. The teacher can change the list.
+HELPER_KILL = ("notepad.exe, notepad++.exe, wordpad.exe, write.exe, code.exe, devenv.exe, sublime_text.exe, atom.exe, "
+               "pycharm64.exe, idea64.exe, eclipse.exe, netbeans64.exe, codeblocks.exe, devcpp.exe, winword.exe, "
+               "excel.exe, powerpnt.exe, onenote.exe, soffice.exe, soffice.bin, wps.exe, chrome.exe, firefox.exe, "
+               "opera.exe, brave.exe, vivaldi.exe, iexplore.exe, whatsapp.exe, telegram.exe, discord.exe, skype.exe, "
+               "teams.exe, ms-teams.exe, zoom.exe, anydesk.exe, teamviewer.exe, rustdesk.exe, quickassist.exe, "
+               "mstsc.exe, snippingtool.exe, screensketch.exe, screenclippinghost.exe, sharex.exe, greenshot.exe, "
+               "obs64.exe, obs32.exe, cmd.exe, powershell.exe, pwsh.exe, windowsterminal.exe, wt.exe, taskmgr.exe, "
+               "regedit.exe, procexp.exe, procexp64.exe, processhacker.exe, systeminformer.exe, calculatorapp.exe, calc.exe")
+EXE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+\-]{0,60}\.(exe|bin)")
 OPTS = {"block_open": True,      # opening files from the PC / pen drive, and the IDE's example programs
         "block_keys": True,      # right-click menu, developer-tools and view-source keys, printing
         "tamper_lock": True,     # lock on developer tools or removed protections
         "unlock": "auto",        # "auto": when back to normal; "teacher": only when the teacher lets them back in
         "leave": "log",          # leaving the exam window: "log", "warn" or "lock" (after leave_limit times)
         "leave_limit": 3,
-        "fullscreen": False}     # the exam runs full screen
+        "fullscreen": False,     # the exam runs full screen
+        "helper": False,         # students must run the exam helper (exam-helper.vbs) on their Windows PC
+        "helper_taskmgr": True,  # ... which turns off Task Manager and the clipboard history during the exam
+        "helper_admin": True,    # ... and, with administrator rights: developer tools off, USB drives blocked
+        "helper_usb": "pause",   # a USB drive on the PC: "pause" the exam there while it is connected, or "note" it
+        "helper_kill": HELPER_KILL}
 EVENT_KINDS = {"left", "fullscreen", "devtools", "tamper", "bigins", "screen2", "blocked"}
 EVENT_NAMES = {"left": "Left the exam window", "fullscreen": "Left full screen", "devtools": "Developer tools opened",
                "tamper": "Exam protection changed", "bigins": "Large insertion in an editor", "screen2": "Second screen",
                "blocked": "Blocked", "stale": "Stopped checking in", "lock": "Locked", "unlock": "Unlocked",
-               "timeup": "Time up"}
+               "timeup": "Time up", "usb": "USB drive connected", "kiosk": "Exam browser closed",
+               "closed": "Programs closed by the exam helper", "helper": "Exam helper"}
 
 
 def safe_name(text, fallback="file", limit=100):
@@ -157,6 +174,7 @@ class ExamMode:
                       "register": True, "collect": 0, "labs": None, "code": None, "allow": "", "ends_at": None,
                       "timeup": False, "opts": dict(OPTS), "message": None}
         self.students = {}        # token -> record
+        self.agents = {}          # exam helper token -> {ip, pc, user, kiosk, beat, status ...}
         try:
             saved = json.loads(self.state_file.read_text(encoding="utf-8"))
             for k in self.state:
@@ -164,6 +182,7 @@ class ExamMode:
                     self.state[k] = saved[k]
             self.state["title"] = str(self.state["title"] or "")[:120]
             self.state["opts"] = {**OPTS, **(self.state["opts"] or {})}
+            self.agents = saved.get("agents") or {}
             if self.state["folder"]:
                 roster = json.loads((self.exam_dir() / ".exam.json").read_text(encoding="utf-8"))
                 if roster.get("id") == self.state["id"]:
@@ -185,7 +204,7 @@ class ExamMode:
 
     def _save(self):
         try:
-            self.state_file.write_text(json.dumps(self.state), encoding="utf-8")
+            self.state_file.write_text(json.dumps(dict(self.state, agents=self.agents)), encoding="utf-8")
         except OSError:
             pass
         if self.state["folder"]:
@@ -254,8 +273,10 @@ class ExamMode:
         o["unlock"] = "teacher" if o["unlock"] == "teacher" else "auto"
         o["leave"] = o["leave"] if o["leave"] in ("log", "warn", "lock") else "log"
         o["leave_limit"] = max(1, min(20, int(o["leave_limit"] or 3)))
-        for k in ("block_open", "block_keys", "tamper_lock", "fullscreen"):
+        for k in ("block_open", "block_keys", "tamper_lock", "fullscreen", "helper", "helper_taskmgr", "helper_admin"):
             o[k] = bool(o[k])
+        o["helper_usb"] = "note" if o["helper_usb"] == "note" else "pause"
+        o["helper_kill"] = ", ".join(dict.fromkeys(m.group(0).lower() for m in EXE_RE.finditer(str(o["helper_kill"] or ""))))
         with self.lock:
             s = self.state
             title = str(title or "").strip()[:120]
@@ -265,6 +286,7 @@ class ExamMode:
                          id=time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2), timeup=False, message=None,
                          ends_at=now + int(minutes) * 60 if int(minutes or 0) > 0 else None)
                 self.students = {}
+                self.agents = {}
                 s["folder"] = self._new_folder(title) if s["register"] else None
                 s["code"] = f"{secrets.randbelow(9000) + 1000}" if code else None
             elif on:                                   # changes during the exam
@@ -343,7 +365,7 @@ class ExamMode:
             return {"asked": len(active), "answered": sum(1 for r in active if r.get("done", 0) >= n)}
 
     # ------------------------------------------------------------ students
-    def register(self, exam_id, name, enrolment, code, ip):
+    def register(self, exam_id, name, enrolment, code, ip, kiosk=""):
         name, enrolment = clean_student(name, enrolment)
         with self.lock:
             s = self.state
@@ -353,6 +375,12 @@ class ExamMode:
                 raise PermissionError("The time for this exam is over.")
             if not ip_allowed(ip, self._ranges):
                 raise PermissionError("This PC is not one of the exam PCs. Ask your teacher.")
+            if s["opts"].get("helper"):
+                ag = self._agent_for(ip)
+                if not ag or not ag["status"].get("ready"):
+                    raise PermissionError("Run the exam helper on this PC first.")
+                if str(kiosk or "") != ag["kiosk"]:
+                    raise PermissionError("Start the exam in the browser that the exam helper opened.")
             if s["code"] and str(code or "").strip() != s["code"]:
                 raise ValueError("The exam code is not right. Look at the board, or ask your teacher.")
             key = re.sub(r"[\s/._-]", "", enrolment)
@@ -427,7 +455,7 @@ class ExamMode:
                 self._save()
             return rec.get("locked") if rec else None
 
-    def gate(self, token, path, query, page):
+    def gate(self, token, path, query, page, ip=""):
         """None when the request may be served, else (status, message) - the server's own safeguards."""
         labs = labs_for(path, query, page)
         if labs is None:
@@ -443,6 +471,10 @@ class ExamMode:
                 return None
             if s["timeup"]:
                 return 403, "The time for the exam is over."
+            if s["opts"].get("helper"):
+                ag = self._agent_for(ip)
+                if not ag or not ag["status"].get("ready"):
+                    return 403, "Run the exam helper on this PC first."
             if not s["register"]:
                 return None
             rec = self.students.get(token or "")
@@ -458,6 +490,113 @@ class ExamMode:
                     self._save()
                 return 403, "This PC stopped checking in with the exam."
             return None
+
+    # ------------------------------------------------------------ exam helper (exam-helper.vbs on the PC)
+    def _agent_for(self, ip):
+        """The running exam helper of this PC (lock held), or None."""
+        now = time.time()
+        best = None
+        for ag in self.agents.values():
+            if ag["ip"] == ip and not ag.get("gone") and now - ag["beat"] < AGENT_STALE:
+                if not best or ag["beat"] > best["beat"]:
+                    best = ag
+        return best
+
+    def _students_on(self, ip):
+        return [r for r in self.students.values() if (r.get("ip_now") or r["ip"]) == ip]
+
+    def helper_settings(self):
+        o = self.state["opts"]
+        return {"taskmgr": bool(o["helper_taskmgr"]), "admin": bool(o["helper_admin"]), "kill": o["helper_kill"]}
+
+    def agent_hello(self, ip, info):
+        """A PC's exam helper starts. Returns its token, the kiosk key for the exam browser and the settings."""
+        with self.lock:
+            s = self.state
+            if not (s["on"] and s["opts"].get("helper")):
+                raise PermissionError("No exam that needs the exam helper is running." if not s["on"]
+                                      else "This exam does not use the exam helper.")
+            if not ip_allowed(ip, self._ranges):
+                raise PermissionError("This PC is not one of the exam PCs. Ask your teacher.")
+            pc = re.sub(r"[^\w .\-]", "", str(info.get("pc") or ""))[:40]
+            old = next((a for a in self.agents.values() if a["ip"] == ip and a.get("pc") == pc), None)
+            kiosk = old["kiosk"] if old else secrets.token_urlsafe(12)     # the exam browser keeps working after a restart
+            for t in [t for t, a in self.agents.items() if a["ip"] == ip]:
+                del self.agents[t]
+            token = secrets.token_urlsafe(18)
+            now = time.time()
+            self.agents[token] = {"ip": ip, "pc": pc, "user": re.sub(r"[^\w .\-@]", "", str(info.get("user") or ""))[:40],
+                                  "version": str(info.get("version") or "")[:10], "kiosk": kiosk, "first": now,
+                                  "beat": now, "status": {"ready": False}}
+            for rec in self._students_on(ip):
+                self._log(rec, "helper", "exam helper started")
+            self._save()
+            return {"token": token, "kiosk": kiosk, "exam": s["id"], "title": s["title"], **self.helper_settings()}
+
+    def agent_beat(self, token, status):
+        """The helper reports what it sees on the PC. Returns whether the exam goes on, and the settings."""
+        with self.lock:
+            self._tick()
+            ag = self.agents.get(token or "")
+            s = self.state
+            if not ag:
+                return {"known": False, "on": s["on"], "end": not s["on"]}
+            now = time.time()
+            ag["beat"] = now
+            old = ag.get("status") or {}
+            st = {"ready": bool(status.get("ready")), "browser": bool(status.get("browser")),
+                  "taskmgr": bool(status.get("taskmgr")), "admin": bool(status.get("admin")),
+                  "devtools": bool(status.get("devtools")), "usbblock": bool(status.get("usbblock")),
+                  "usb": str(status.get("usb") or "")[:40], "screens": int(status.get("screens") or 0),
+                  "problem": str(status.get("problem") or "")[:200], "killed": str(status.get("killed") or "")[:300],
+                  "relaunched": int(status.get("relaunched") or 0)}
+            ag["status"] = st
+            students = self._students_on(ag["ip"])
+            seen = ag.setdefault("closed_at", {})          # note each program at most every 2 minutes
+            fresh = [n for n in st["killed"].split(",") if n and now - seen.get(n, 0) > 120]
+            for n in fresh:
+                seen[n] = now
+            for rec in students:
+                if fresh:
+                    self._log(rec, "closed", ", ".join(fresh))
+                if st["relaunched"] > (old.get("relaunched") or 0):
+                    self._log(rec, "kiosk", "the exam browser was closed and opened again")
+                if st["usb"] and st["usb"] != old.get("usb"):
+                    rec.setdefault("counts", {})["usb"] = rec.get("counts", {}).get("usb", 0) + 1
+                    self._log(rec, "usb", f"drive {st['usb']}")
+                if st["screens"] > 1 and (old.get("screens") or 0) <= 1:
+                    rec.setdefault("counts", {})["screen2"] = rec.get("counts", {}).get("screen2", 0) + 1
+                    self._log(rec, "screen2", f"{st['screens']} screens (exam helper)")
+                lk = rec.get("locked")
+                if st["usb"] and s["opts"]["helper_usb"] == "pause":
+                    self._lock(rec, "usb", f"A USB drive ({st['usb']}) is connected; remove it to continue", auto=True)
+                elif not st["usb"] and lk and lk.get("kind") == "usb":
+                    rec["locked"] = None
+                    self._log(rec, "unlock", "USB drive removed")
+            if students or st != old:
+                self._save()
+            return {"known": True, "on": s["on"], "end": not s["on"], "title": s["title"], **self.helper_settings()}
+
+    def agent_bye(self, token, reason=""):
+        with self.lock:
+            ag = self.agents.get(token or "")
+            if ag:
+                ag["gone"] = time.time()
+                for rec in self._students_on(ag["ip"]):
+                    self._log(rec, "helper", f"exam helper stopped ({str(reason)[:60] or 'PC put back to normal'})")
+                self._save()
+
+    def client_agent(self, ip, kiosk, loopback):
+        """For the exam page: is this PC's exam helper running, and is this the helper's browser?"""
+        with self.lock:
+            if not self.state["opts"].get("helper") or loopback:
+                return {"ok": True, "ready": True, "kiosk": True, "problem": ""}
+            ag = self._agent_for(ip)
+            if not ag:
+                return {"ok": False, "ready": False, "kiosk": False, "problem": ""}
+            st = ag["status"]
+            return {"ok": True, "ready": bool(st.get("ready")), "kiosk": bool(kiosk) and kiosk == ag["kiosk"],
+                    "problem": st.get("problem", "")}
 
     def cache_key(self):
         """Part of the runtime cookie: during an exam it changes, so browsers check every file with the server."""
@@ -516,7 +655,8 @@ class ExamMode:
         c = rec.get("counts", {})
         out = []
         for kind, label in (("devtools", "Developer tools"), ("tamper", "Protection changed"), ("stale", "Stopped checking in"),
-                            ("screen2", "Second screen"), ("bigins", "Large insertion"), ("fullscreen", "Left full screen")):
+                            ("usb", "USB drive"), ("screen2", "Second screen"), ("bigins", "Large insertion"),
+                            ("fullscreen", "Left full screen")):
             if c.get(kind):
                 out.append(f"{label} x{c[kind]}")
         if c.get("left"):
@@ -543,9 +683,26 @@ class ExamMode:
                              "online": now - r["seen"] < 30,
                              "twice": counts[re.sub(r"[\s/._-]", "", r["enrolment"])] > 1,
                              "locked": r.get("locked"), "alerts": self.alerts(r),
+                             "helper": self._helper_row(r.get("ip_now") or r["ip"]),
                              "events": [dict(e, name=EVENT_NAMES.get(e["kind"], e["kind"])) for e in r.get("events", [])[-12:]]})
             folder = str(self.exam_dir().resolve()) if self.state["folder"] else None
-            return {"exam": dict(self.state), "folder": folder, "students": rows, "labs": LABS, "now": now}
+            signed = {r.get("ip_now") or r["ip"] for r in self.students.values()}
+            pcs = [dict(self._helper_row(a["ip"]) or {}, ip=a["ip"]) for a in self.agents.values()
+                   if a["ip"] not in signed and not a.get("gone") and now - a["beat"] < AGENT_STALE]
+            return {"exam": dict(self.state), "folder": folder, "students": rows, "labs": LABS, "now": now,
+                    "helper_pcs": pcs, "helper_kill": HELPER_KILL}
+
+    def _helper_row(self, ip):
+        """What the exam helper reports for this PC, for the control page (lock held)."""
+        if not self.state["opts"].get("helper"):
+            return None
+        ag = self._agent_for(ip)
+        if not ag:
+            return {"running": False}
+        st = ag["status"]
+        return {"running": True, "ready": st.get("ready"), "pc": ag.get("pc"), "taskmgr": st.get("taskmgr"),
+                "admin": st.get("admin"), "devtools": st.get("devtools"), "usbblock": st.get("usbblock"),
+                "usb": st.get("usb"), "screens": st.get("screens"), "problem": st.get("problem")}
 
     def zip_file(self):
         """The exam folder as a zip in a temporary file: <title>/<Name>_<Enrolment>/..., roster.csv, incidents.csv."""

@@ -216,14 +216,69 @@ Everything is recorded with times:
 During an exam the browsers check every file with the server instead of using their 30-day copy,
 so these rules apply to every file. The checks are cheap 304 replies, not new downloads.
 
+### Exam helper for Windows PCs
+
+For what a web page cannot do, tick **Students must run the exam helper** on the control page.
+Students then run `exam-helper.vbs` (VBScript, built into Windows 10 and 11) on their PC before
+they can start. It needs no administrator rights. While the exam runs, it:
+
+* **Closes other programs and keeps them closed.** The list is editable on the control page. It
+  covers editors and IDEs, Office, other browsers, chat, remote-desktop tools, screenshot and
+  recording tools, terminals, Task Manager, regedit and calculators. Windows itself and the
+  exam window are never touched.
+* **Opens the exam in its own Edge window** in kiosk mode: full screen, no address bar, no tabs,
+  and no internet (only the lab server can be reached). If the student closes it, it opens again.
+* **Turns off Task Manager and the clipboard history** (optional).
+* **Watches and reports to the server:** USB drives (optionally pausing the exam on that PC until
+  the drive is removed), a second screen, and the programs it had to close. It refuses to run in a
+  remote-desktop session.
+* **With administrator rights** (optional; only when the PC's account has them, after Windows'
+  usual prompt): turns off developer tools in Edge and Chrome (`DeveloperToolsAvailability` = 2)
+  and blocks USB drives.
+
+**Enforced by the server.**
+
+* A PC can sign in and get lab files only while its helper checks in (every 3 seconds), and only
+  from the helper's exam window. Other browsers see "Use the exam window", and signing in from
+  them is refused.
+* If the helper is stopped, the server stops serving that PC's labs within 20 seconds and the page
+  asks for the helper again. Running it again resumes the exam.
+* The control page shows each student's helper status: running, Task Manager off, developer tools
+  off, USB blocked, USB drives, screens. It also lists the PCs where the helper runs but nobody
+  has signed in yet.
+
+**Back to normal.**
+
+* When you end the exam, every helper puts back exactly what it changed and closes the exam
+  window. The backups are in `%LOCALAPPDATA%\FoCTExam`, plus `%ProgramData%\FoCTExam` for
+  administrator changes.
+* If the PC restarts first, the helper finishes this at the next sign-in, from a one-time
+  start-up entry, and administrator changes are undone at start-up by a one-time task.
+* Running it with `/restore` does the same by hand.
+* If the lab server cannot be reached for 30 minutes, the helper puts the PC back by itself.
+
+**Getting it onto the PCs.**
+
+* **Download exam-helper.vbs** on the control page. The server writes its own address into the
+  file. Copy it to each PC's desktop or a shared folder.
+* Students can also download it from the exam page, but browsers and Windows warn about `.vbs`
+  files: "Keep", then "Run".
+* `exam-helper.vbs /test` talks to the server but changes nothing on the PC, for trying it out.
+
+Microsoft has announced that VBScript will be phased out in a future Windows version. In Windows 11
+24H2 it is still installed by default as an optional feature.
+
 **What this cannot do.** All the in-page checks run in the student's own browser:
 
 * A student who can rewrite the exam script itself could get around them, though not around the
   server's part.
 * To close that gap, turn off developer tools on the lab PCs with the Edge or Chrome policy
-  `DeveloperToolsAvailability` = 2, through Group Policy or the lab image.
-* Other programs, USB drives, internet sites and phones are outside any web page's reach. Use the
-  lab's usual exam setup for those: firewall, browser policies and kiosk mode.
+  `DeveloperToolsAvailability` = 2, through Group Policy or the lab image. The exam helper does
+  this when the PC's account has administrator rights.
+* The exam helper also runs on the student's PC. A student with administrator rights or
+  scripting skills could stop it or imitate its reports. Stopping it cuts their labs off at once;
+  imitating it takes real effort.
+* Phones and cameras are outside any software's reach.
 
 ## Project layout
 
@@ -232,7 +287,8 @@ start-server.bat / .sh     launchers
 server/serve.py            LAN web server (standard library only): gzip, caching, isolation headers, /__status
 server/make_cert.py        lab CA + HTTPS certificate
 server/exam-control.html   exam mode switch, roster and zip download (/__exam/control, server PC only)
-server/exam_mode.py        exam state, student sign-in, submissions and the zip
+server/exam_mode.py        exam state, student sign-in, submissions, safeguards and the zip
+server/exam-helper.vbs     exam helper for the student PCs (served at /exam-helper.vbs with this server's address)
 submissions/               the students' exam work, one folder per exam   (created in exams)
 tools/setup.py             downloads and patches all third-party runtimes into web/
 tools/javasdk.py           repairs the TeaVM javac class library (TeaVM @Rename/@Remove)
