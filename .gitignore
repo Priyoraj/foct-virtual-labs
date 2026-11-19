@@ -38,3 +38,6 @@ __pycache__/
 .idea/
 Thumbs.db
 desktop.ini
+
+# Exam submissions collected from the students (exam mode)
+/submissions/

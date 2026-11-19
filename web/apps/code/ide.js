@@ -630,7 +630,7 @@ function welcome() {
     Lex programs read until the end of the input: press <kbd>Ctrl</kbd>+<kbd>D</kbd> when you have finished typing. Try the examples in the <b>&middot;&middot;&middot;</b> menu.</p>` : ""}
     <p>Press <b>Run</b> (<kbd>Ctrl</kbd>+<kbd>Enter</kbd>) to ${LANG.runner === "python" ? "run" : "compile and run"} your program.
     When it asks for input, type here and press <kbd>Enter</kbd>.</p>
-    <p>Use <b>Save</b> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) to keep your work on this computer or a pen drive &mdash; nothing is stored on the lab server.
+    <p>Use <b>Save</b> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) to keep your work on this computer or a pen drive &mdash; nothing is stored on the lab server (except exam work your teacher collects).
     Examples are in the <b>&middot;&middot;&middot;</b> menu.</p>`;
   con.html(w);
 }

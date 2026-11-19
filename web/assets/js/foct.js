@@ -110,6 +110,7 @@ export async function saveToDisk(name, data, { handle = null, saveAs = false, mi
       const w = await h.createWritable();
       await w.write(blob);
       await w.close();
+      try { window.__foctExamSaved?.(h.name, blob); } catch {}   // exam mode: the teacher gets a copy (downloads are caught by exam.js)
       return { handle: h, name: h.name, method: "file" };
     } catch (e) {
       if (e && e.name === "AbortError") return null;

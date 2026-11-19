@@ -4,7 +4,8 @@ FoCT Virtual Labs - LAN web server.
 
 Serves the ./web folder to every PC on the lab network. All compiling and
 running happens inside each student's browser, so the server only sends
-files: it never receives, runs or stores student work.
+files: it never runs student work, and stores it only during an exam with
+sign-in (exam_mode.py), when the students' work is collected for the teacher.
 
     python server/serve.py                 # http://<this-pc>:8080
     python server/serve.py --port 80
@@ -97,10 +98,15 @@ GENERATION = RuntimeGeneration()
 
 # ---------------------------------------------------------------- exam mode
 # Every page the server sends gets web/assets/js/exam.js. It polls /__exam; while exam mode is
-# on, the page blocks copy and paste and shows an exam watermark. Exam mode is switched on the
-# server PC at /__exam/control and survives a server restart (server/exam-state.json).
+# on, the page blocks copy and paste and shows an exam watermark, and (when students sign in)
+# sends their work here. Exam mode is switched on the server PC at /__exam/control and survives
+# a server restart (server/exam-state.json). Submissions: submissions/<exam>/<student>/ (exam_mode.py).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from exam_mode import ExamMode  # noqa: E402
+
 EXAM_FILE = Path(__file__).resolve().parent / "exam-state.json"
 EXAM_CONTROL = Path(__file__).resolve().parent / "exam-control.html"
+SUBMISSIONS = ROOT / "submissions"
 EXAM_TAG = b'<script src="/assets/js/exam.js"></script>'
 EXAM_TAG_VERSION = "x1"   # change with EXAM_TAG so browsers replace pages they cached with the old tag
 HEAD_RE = re.compile(rb"<head(?:\s[^>]*)?>", re.I)
@@ -115,35 +121,7 @@ def add_exam_tag(page):
     return page[:at] + EXAM_TAG + page[at:]
 
 
-class ExamMode:
-    def __init__(self, path):
-        self.path = path
-        self.lock = threading.Lock()
-        self.state = {"on": False, "title": "", "since": None}
-        try:
-            saved = json.loads(path.read_text(encoding="utf-8"))
-            self.state.update(on=bool(saved.get("on")), title=str(saved.get("title") or "")[:120],
-                              since=saved.get("since"))
-        except (OSError, ValueError, AttributeError):
-            pass
-
-    def get(self):
-        with self.lock:
-            return dict(self.state)
-
-    def set(self, on, title):
-        with self.lock:
-            if on != self.state["on"]:
-                self.state["since"] = time.time() if on else None
-            self.state["on"], self.state["title"] = on, title[:120]
-            try:
-                self.path.write_text(json.dumps(self.state), encoding="utf-8")
-            except OSError:
-                pass
-            return dict(self.state)
-
-
-EXAM = ExamMode(EXAM_FILE)
+EXAM = ExamMode(EXAM_FILE, SUBMISSIONS)
 
 
 class Stats:
@@ -189,8 +167,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.handle_request(head=True)
 
     def do_POST(self):
-        if urllib.parse.urlsplit(self.path).path == "/__exam":
-            return self.exam_post()
+        path = urllib.parse.urlsplit(self.path).path
+        route = {"/__exam": self.exam_post, "/__exam/collect": self.exam_collect,
+                 "/__exam/register": self.exam_register, "/__exam/upload": self.exam_upload,
+                 "/__exam/done": self.exam_done}.get(path)
+        if route:
+            return route()
         self.deny()
 
     def deny(self):
@@ -207,16 +189,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                    secure=isinstance(self.connection, ssl.SSLSocket)), indent=1)
             return self.send_simple(200, body, "application/json; charset=utf-8", head=head)
         if path == "/__exam":
-            body = json.dumps(dict(EXAM.get(), client=self.client_address[0], now=time.time()))
+            you = EXAM.seen(self.headers.get("X-FoCT-Token"), self.client_address[0])
+            body = json.dumps(dict(EXAM.public(), client=self.client_address[0], now=time.time(), you=you))
             return self.send_simple(200, body, "application/json; charset=utf-8", head=head)
-        if path == "/__exam/control":
+        if path.startswith("/__exam/"):
             if not self.is_local():
-                return self.send_simple(403, "Exam mode can only be switched on the server PC.", head=head, page=True)
-            try:
-                page = EXAM_CONTROL.read_text(encoding="utf-8")
-            except OSError:
-                return self.send_simple(404, "Not found", head=head, page=True)
-            return self.send_simple(200, page, "text/html; charset=utf-8", head=head)
+                return self.send_simple(403, "Exam mode can only be managed on the server PC.", head=head, page=True)
+            if path == "/__exam/control":
+                try:
+                    page = EXAM_CONTROL.read_text(encoding="utf-8")
+                except OSError:
+                    return self.send_simple(404, "Not found", head=head, page=True)
+                return self.send_simple(200, page, "text/html; charset=utf-8", head=head)
+            if path == "/__exam/roster":
+                return self.send_simple(200, json.dumps(EXAM.roster()), "application/json; charset=utf-8", head=head)
+            if path == "/__exam/zip":
+                return self.send_zip(head)
+            return self.send_simple(404, "Not found", head=head, page=True)
         target = self.resolve(path)
         if target is None:
             return self.send_simple(404, "Not found", head=head, page=True)
@@ -351,27 +340,105 @@ class Handler(http.server.BaseHTTPRequestHandler):
         ip = self.client_address[0]
         return ip.startswith("127.") or ip == "::1" or ip in (self.info.get("lan_ips") or [])
 
-    def exam_post(self):
-        # Only the server PC may switch exam mode. The custom header stops other web pages
+    def admin_ok(self):
+        # Only the server PC may manage exam mode. The custom header stops other web pages
         # (cross-site requests) from doing it through the administrator's browser.
-        if (not self.is_local() or self.headers.get("X-FoCT-Admin") != "1"
-                or self.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none")):
-            self.close_connection = True
-            return self.send_simple(403, "Exam mode can only be switched on the server PC.")
+        if (self.is_local() and self.headers.get("X-FoCT-Admin") == "1"
+                and self.headers.get("Sec-Fetch-Site", "same-origin") in ("same-origin", "none")):
+            return True
+        self.close_connection = True
+        self.send_simple(403, "Exam mode can only be managed on the server PC.")
+        return False
+
+    def read_json(self, limit=4096):
+        n = int(self.headers.get("Content-Length") or 0)
+        if not 0 < n <= limit:
+            raise ValueError("bad length")
+        data = json.loads(self.rfile.read(n))
+        if not isinstance(data, dict):
+            raise ValueError("not an object")
+        return data
+
+    def reply_json(self, obj, code=200):
+        self.send_simple(code, json.dumps(obj), "application/json; charset=utf-8")
+
+    def refuse(self, code, msg):
+        self.close_connection = True
+        self.reply_json({"error": msg}, code)
+
+    def exam_post(self):
+        if not self.admin_ok():
+            return
         try:
-            n = int(self.headers.get("Content-Length") or 0)
-            if not 0 < n <= 4096:
+            data = self.read_json()
+            if "on" not in data:
                 raise ValueError
-            data = json.loads(self.rfile.read(n))
-            if not isinstance(data, dict) or "on" not in data:
-                raise ValueError
-            state = EXAM.set(bool(data["on"]), str(data.get("title") or "").strip())
         except (ValueError, TypeError):
-            self.close_connection = True
-            return self.send_simple(400, "Send JSON like {\"on\": true, \"title\": \"...\"}.")
+            return self.refuse(400, 'Send JSON like {"on": true, "title": "...", "register": true}.')
+        state = EXAM.set(bool(data["on"]), data.get("title"), data.get("register", True))
         title = f": {state['title']}" if state["on"] and state["title"] else ""
         print(f"{time.strftime('%H:%M')}  EXAM MODE {'ON' if state['on'] else 'OFF'}{title}", flush=True)
-        self.send_simple(200, json.dumps(state), "application/json; charset=utf-8")
+        self.reply_json(state)
+
+    def exam_collect(self):
+        if not self.admin_ok():
+            return
+        if int(self.headers.get("Content-Length") or 0):
+            self.rfile.read(min(int(self.headers["Content-Length"]), 4096))
+        self.reply_json(EXAM.collect())
+
+    def exam_register(self):
+        try:
+            data = self.read_json()
+            token, rec = EXAM.register(data.get("exam"), data.get("name"), data.get("enrolment"), self.client_address[0])
+        except PermissionError as e:
+            return self.refuse(409, str(e))
+        except (ValueError, TypeError) as e:
+            return self.refuse(400, str(e) if str(e) and " " in str(e) else "Please check your name and enrolment number.")
+        print(f"{time.strftime('%H:%M')}  signed in: {rec['name']} ({rec['enrolment']}) from {self.client_address[0]}", flush=True)
+        self.reply_json({"token": token, "name": rec["name"], "enrolment": rec["enrolment"], "folder": rec["folder"]})
+
+    def exam_upload(self):
+        try:
+            length = int(self.headers.get("Content-Length") or -1)
+            rel = EXAM.upload(self.headers.get("X-FoCT-Token"), urllib.parse.unquote(self.headers.get("X-FoCT-Path", "")),
+                              length, self.rfile)
+        except PermissionError as e:
+            return self.refuse(403, str(e))
+        except (ValueError, OSError) as e:
+            return self.refuse(400, str(e) or "Upload failed.")
+        STATS.add(self.client_address[0], 0)
+        self.reply_json({"ok": True, "path": rel})
+
+    def exam_done(self):
+        try:
+            data = self.read_json()
+            EXAM.done(self.headers.get("X-FoCT-Token"), int(data.get("collect", 0)))
+        except (ValueError, TypeError):
+            return self.refuse(400, "bad request")
+        self.reply_json({"ok": True})
+
+    def send_zip(self, head):
+        try:
+            f, size, name = EXAM.zip_file()
+        except FileNotFoundError as e:
+            return self.send_simple(404, str(e), head=head, page=True)
+        with f:
+            ascii_name = name.encode("ascii", "replace").decode().replace("?", "_").replace('"', "'")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(size))
+            self.send_header("Content-Disposition", f"attachment; filename=\"{ascii_name}\"; "
+                                                    f"filename*=UTF-8''{urllib.parse.quote(name)}")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            if not head:
+                try:
+                    while chunk := f.read(256 * 1024):
+                        self.wfile.write(chunk)
+                except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, socket.timeout):
+                    self.close_connection = True
+        print(f"{time.strftime('%H:%M')}  submissions downloaded: {name} ({size // 1024} KB)", flush=True)
 
     def cookie(self, name):
         for part in self.headers.get("Cookie", "").split(";"):
@@ -551,9 +618,9 @@ def main():
     print(f" Exam mode        :  http://localhost:{args.port}/__exam/control  (on this PC only)")
     print(line)
     print(" Students only need a browser (Chrome / Edge / Firefox). Their files are")
-    print(" saved on their own PC; nothing is uploaded here. Press Ctrl+C to stop.")
+    print(" saved on their own PC; only exam work is sent here. Press Ctrl+C to stop.")
     print(line, flush=True)
-    exam = EXAM.get()
+    exam = EXAM.public()
     if exam["on"]:
         print(f" EXAM MODE IS ON{': ' + exam['title'] if exam['title'] else ''}  (end it on the page above)", flush=True)
 

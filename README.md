@@ -26,6 +26,8 @@ Students open one address on the lab network and get:
 **Student files are never stored on the server.** Every app saves to and opens from the
 student's own computer (download, or the browser's "Save as" picker in secure mode). Unsaved code is
 kept as a browser draft on that PC, and the home page has a *Clear my lab data* button for shared PCs.
+The one exception is an exam with sign-in (see [Exam mode](#exam-mode)): the students' exam work is
+then sent to the server for the teacher.
 
 ## Why it is light on the server
 
@@ -107,14 +109,55 @@ including Jupyter, Office and draw.io:
 **End exam mode** turns it off the same way. Exam mode stays on if the server restarts; the
 state is kept in `server/exam-state.json`.
 
+### Sign-in and collecting the students' work
+
+Leave **Students sign in with their name and enrolment no.** ticked when you start the exam. Each
+student then types their name and enrolment number once, on whichever lab page they open first.
+The page shows a bar with their name and a **Submit files** button, and their work reaches the
+server PC by itself:
+
+* **Lab work changed during the exam**: C, C++, Java, Python, Lex & Yacc, SQL, MongoDB, SPICE,
+  NetSim and Jupyter notebooks. It is sent at most once a minute, and at once when you collect.
+  Drafts left on the PC from earlier classes are not taken.
+* **Every file the student saves or downloads** from a lab, including Office documents, draw.io
+  diagrams and circuits.
+* **Files the student hands in with Submit files**, for example from their Downloads folder.
+
+**Download submissions (.zip)** on the control page first asks every PC for its latest work
+(a few seconds). It then saves `<Exam title>.zip` to your Downloads folder:
+
+```
+<Exam title>/
+  roster.csv                          name, enrolment no., PC, sign-in time, last work received
+  <Name>_<Enrolment no.>/
+    _student.txt
+    C/main.c, SQL/query.sql, Jupyter/<notebook>.ipynb ...   lab work
+    Saved files/...                   files the student saved or downloaded
+    Submitted files/...               files handed in with Submit files
+```
+
+* **Collect work and end exam** does a final collection and then ends exam mode.
+* The last exam's submissions stay downloadable after the exam.
+* On the server PC the same folders are kept in `submissions/<Exam title>/`.
+* Only the latest version of each file is kept.
+* If the same enrolment number signs in on a second PC, that PC gets its own folder, so nothing is overwritten, and the roster marks it "2 PCs".
+
+Limits:
+
+* Uploads are accepted only from signed-in students of the running exam, plus 2 minutes after it ends.
+* Each student can send up to 50 MB per file and 300 MB in total.
+* Program files (`.exe`, `.bat`, `.ps1`, `.msi`, ...) are refused.
+
 How it works:
 
 * The server adds `web/assets/js/exam.js` to every page it sends.
 * The script checks `/__exam` every 8 seconds.
 * Its listeners run before any editor sees the event.
+* All labs share one browser storage, so whichever page is open can send every lab's drafts.
+* The server code is in `server/exam_mode.py`.
 
-Only the server PC can switch exam mode, and other web sites cannot do it through the
-administrator's browser.
+Only the server PC can switch exam mode, see the roster or download submissions, and other web
+sites cannot do it through the administrator's browser.
 
 Exam mode stops casual copying, but a student who knows the browser's developer tools could get
 around it. For strict exams, also turn off developer tools on the lab PCs with the Edge or
@@ -127,14 +170,16 @@ by the lab's usual exam setup.
 start-server.bat / .sh     launchers
 server/serve.py            LAN web server (standard library only): gzip, caching, isolation headers, /__status
 server/make_cert.py        lab CA + HTTPS certificate
-server/exam-control.html   exam mode switch (served at /__exam/control, server PC only)
+server/exam-control.html   exam mode switch, roster and zip download (/__exam/control, server PC only)
+server/exam_mode.py        exam state, student sign-in, submissions and the zip
+submissions/               the students' exam work, one folder per exam   (created in exams)
 tools/setup.py             downloads and patches all third-party runtimes into web/
 tools/javasdk.py           repairs the TeaVM javac class library (TeaVM @Rename/@Remove)
 tools/make_brand.py        cuts the ADtU logo into web assets
 tools/jupyterlite/         JupyterLite config and starter notebook
 tools/office/              blank Word/Excel/PowerPoint templates
 web/index.html, help.html  portal and help
-web/assets/js/exam.js      exam mode in every page (clipboard block, watermark)
+web/assets/js/exam.js      exam mode in every page (clipboard block, watermark, sign-in, sending work)
 web/apps/code/             C / C++ / Java / Python IDE (Monaco editor, workers, WASI runtime)
 web/apps/netsim/           FoCT NetSim network simulator
 web/apps/sql/              SQL Lab (SQLite and PostgreSQL workers, sample databases)

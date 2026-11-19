@@ -6,31 +6,45 @@
 <title>Exam mode · FoCT Virtual Labs</title>
 <link rel="icon" type="image/png" href="/assets/brand/favicon-32.png">
 <style>
-  :root { color-scheme: light dark; --navy: #342e6c; --red: #dc2626; --bg: #f5f4fb; --card: #fff; --line: #e3e1f2; --text: #1d1b33; --muted: #6b6890; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #15142a; --card: #1f1d3a; --line: #34325c; --text: #ecebf8; --muted: #a9a6cf; } }
+  :root { color-scheme: light dark; --navy: #342e6c; --red: #dc2626; --bg: #f5f4fb; --card: #fff; --line: #e3e1f2; --text: #1d1b33; --muted: #6b6890; --ok: #15803d; --warn: #b45309; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15142a; --card: #1f1d3a; --line: #34325c; --text: #ecebf8; --muted: #a9a6cf; --ok: #4ade80; --warn: #fbbf24; } }
   * { box-sizing: border-box; }
   body { margin: 0; font: 16px/1.5 "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
-  main { max-width: 640px; margin: 40px auto; padding: 0 16px; }
-  header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  main { max-width: 980px; margin: 32px auto; padding: 0 16px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
   header img { width: 46px; height: 46px; border-radius: 50%; background: #fff; padding: 2px; }
   header h1 { font-size: 1.4rem; margin: 0; }
   header small { display: block; color: var(--muted); font-size: .85rem; font-weight: 500; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; box-shadow: 0 6px 24px rgba(30, 20, 90, .08); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; box-shadow: 0 6px 24px rgba(30, 20, 90, .08); margin-bottom: 18px; }
   .card.on { border-color: var(--red); box-shadow: 0 0 0 3px rgba(220, 38, 38, .18); }
   .state { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; font-weight: 700; }
   .dot { width: 14px; height: 14px; border-radius: 50%; background: #9ca3af; flex: none; }
   .on .dot { background: var(--red); box-shadow: 0 0 0 5px rgba(220, 38, 38, .2); }
   .muted { color: var(--muted); font-size: .93rem; }
-  label { display: block; font-weight: 600; margin: 18px 0 6px; }
-  input { width: 100%; padding: 10px 12px; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
-  .row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  label.f { display: block; font-weight: 600; margin: 16px 0 6px; }
+  input[type=text] { width: 100%; padding: 10px 12px; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-size: .95rem; }
+  .check input { margin-top: 4px; width: 17px; height: 17px; accent-color: var(--red); }
+  .row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
   button { font: inherit; font-weight: 700; padding: 10px 18px; border-radius: 10px; border: 0; cursor: pointer; color: #fff; }
   button:disabled { opacity: .45; cursor: default; }
-  #start { background: var(--red); }
-  #stop { background: var(--navy); }
-  h2 { font-size: 1.05rem; margin: 28px 0 6px; }
-  ul { padding-left: 1.2em; margin: 0; }
+  .start { background: var(--red); }
+  .stop { background: var(--navy); }
+  .dl { background: #0f766e; }
+  h2 { font-size: 1.1rem; margin: 0 0 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; margin-top: 12px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+  td.n { color: var(--muted); }
+  .pill { display: inline-block; font-size: .78rem; font-weight: 700; padding: 1px 8px; border-radius: 99px; }
+  .pill.ok { color: var(--ok); border: 1px solid currentColor; }
+  .pill.off { color: var(--muted); border: 1px solid currentColor; }
+  .pill.warn { color: var(--warn); border: 1px solid currentColor; }
+  .scroll { overflow-x: auto; }
+  code { font-size: .88em; word-break: break-all; }
+  ul { padding-left: 1.2em; margin: 6px 0 0; }
   li { margin: 4px 0; }
+  #msg { font-weight: 600; }
 </style>
 </head>
 <body>
@@ -43,66 +57,134 @@
   <div class="card" id="card">
     <div class="state"><span class="dot"></span><span id="stateText">Checking&hellip;</span></div>
     <p class="muted" id="since"></p>
-    <label for="title">Exam title (shown in the watermark)</label>
-    <input id="title" maxlength="120" placeholder="e.g. Programming in C, practical exam, CSE 3rd semester">
+    <label class="f" for="title">Exam title (used for the watermark and the submissions folder)</label>
+    <input type="text" id="title" maxlength="120" placeholder="e.g. Programming in C, practical exam, CSE 3rd semester">
+    <label class="check"><input type="checkbox" id="register" checked>
+      <span>Students sign in with their <b>name and enrolment no.</b>, and their work is sent to this PC
+      <span class="muted">(lab work every minute, every file they save or download, and files they hand in with &ldquo;Submit files&rdquo;)</span></span></label>
     <div class="row">
-      <button id="start">Start exam mode</button>
-      <button id="stop">End exam mode</button>
+      <button class="start" id="start">Start exam mode</button>
+      <button class="stop" id="stop">Collect work and end exam</button>
     </div>
-    <p class="muted" id="pcs"></p>
   </div>
 
-  <h2>What exam mode does</h2>
-  <ul class="muted">
-    <li>On every lab page, copy, cut and paste stop working: keyboard shortcuts, right-click menus and editor menus. Dragging text or files into a page is blocked too.</li>
-    <li>A red frame and a watermark with the exam title, the PC&rsquo;s network address and the time cover every page, including screenshots and printouts.</li>
-    <li>Open pages switch within about 10 seconds, and nothing needs to be installed. Exam mode stays on if the server restarts.</li>
-    <li>It stops casual copying. A student who knows the browser&rsquo;s developer tools could still get around it, so for strict exams also turn off developer tools on the lab PCs with a browser policy (Edge and Chrome: <i>DeveloperToolsAvailability</i> = 2).</li>
-  </ul>
+  <div class="card" id="subs" hidden>
+    <h2 id="subsTitle">Students</h2>
+    <div class="muted" id="where"></div>
+    <div class="row">
+      <button class="dl" id="download">Download submissions (.zip)</button>
+      <span id="msg" class="muted"></span>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>#</th><th>Name</th><th>Enrolment no.</th><th>PC</th><th>Signed in</th><th>Work received</th><th>Files</th><th></th></tr></thead>
+        <tbody id="rows"><tr><td colspan="8" class="muted">No student has signed in yet.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>What exam mode does</h2>
+    <ul class="muted">
+      <li>On every lab page, copy, cut and paste stop working: keyboard shortcuts, right-click menus and editor menus. Dragging text or files into a page is blocked too.</li>
+      <li>A red frame and a watermark with the exam title, the student, the PC&rsquo;s network address and the time cover every page, including screenshots and printouts.</li>
+      <li>With sign-in, each student types their name and enrolment no. once. Their lab work then reaches this PC by itself: lab drafts changed during the exam, every file they save or download, and files they hand in with <b>Submit files</b>.</li>
+      <li><b>Download submissions</b> first asks every PC for its latest work (a few seconds). It then saves <i>Exam title</i>.zip to this PC&rsquo;s Downloads folder, with one folder per student named <i>Name_Enrolment</i> and a roster.csv.</li>
+      <li>Open pages switch within about 10 seconds. Exam mode stays on if the server restarts.</li>
+      <li>It stops casual copying. A student who knows the browser&rsquo;s developer tools could still get around it, so for strict exams also turn off developer tools on the lab PCs with a browser policy (Edge and Chrome: <i>DeveloperToolsAvailability</i> = 2).</li>
+    </ul>
+  </div>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
-let typed = false;
+const ADMIN = { "Content-Type": "application/json", "X-FoCT-Admin": "1" };
+let typed = false, exam = null, busy = false;
 $("title").addEventListener("input", () => { typed = true; });
+const time = (t) => t ? new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-function show(e) {
+function show(info) {
+  const e = info.exam;
+  exam = e;
   $("card").classList.toggle("on", !!e.on);
   $("stateText").textContent = e.on ? "Exam mode is ON" : "Exam mode is off";
-  const since = e.on && e.since ? new Date(e.since * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
-  $("since").textContent = e.on ? `Started at ${since}${e.title ? " · " + e.title : ""}` : "Students can copy and paste as usual.";
+  $("since").textContent = e.on ? `Started at ${time(e.since)}${e.title ? " · " + e.title : ""}${e.register ? " · students sign in" : ""}`
+                                : "Students can copy and paste as usual.";
   $("start").textContent = e.on ? "Update title" : "Start exam mode";
   $("stop").disabled = !e.on;
-  if (!typed) $("title").value = e.title || "";
+  $("stop").textContent = e.on && e.register ? "Collect work and end exam" : "End exam mode";
+  if (!typed) $("title").value = e.on ? e.title || "" : $("title").value;
+  if (e.on) $("register").checked = !!e.register;
+  $("register").disabled = !!e.on && !!e.register;
+  const hasSubs = !!info.folder;
+  $("subs").hidden = !hasSubs;
+  if (!hasSubs) return;
+  $("subsTitle").textContent = `${e.on ? "Students" : "Last exam"}: ${e.title || "Exam"} (${info.students.length} signed in)`;
+  $("where").innerHTML = `Saved on this PC in <code>${esc(info.folder)}</code>`;
+  const rows = info.students.map((s, i) => `<tr>
+      <td class="n">${i + 1}</td><td>${esc(s.name)}</td><td>${esc(s.enrolment)}</td><td>${esc(s.pc)}</td>
+      <td>${time(s.first)}</td><td>${s.saved ? time(s.saved) : '<span class="muted">nothing yet</span>'}</td>
+      <td>${s.files ? `${s.files} (${s.kb} KB)` : ""}</td>
+      <td>${e.on ? (s.online ? '<span class="pill ok">online</span>' : '<span class="pill off">offline</span>') : ""}
+          ${s.twice ? ' <span class="pill warn" title="The same enrolment no. signed in on more than one PC">2 PCs</span>' : ""}</td></tr>`);
+  $("rows").innerHTML = rows.join("") || '<tr><td colspan="8" class="muted">No student has signed in yet.</td></tr>';
 }
 
 async function load() {
   try {
-    const [e, s] = await Promise.all([
-      fetch("/__exam", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/__status", { cache: "no-store" }).then((r) => r.json()),
-    ]);
-    show(e);
-    $("pcs").textContent = `${s.active_pcs_5min} PC${s.active_pcs_5min === 1 ? "" : "s"} used the lab in the last 5 minutes.`;
+    show(await fetch("/__exam/roster", { cache: "no-store" }).then((r) => r.json()));
   } catch {
     $("stateText").textContent = "Cannot reach the lab server";
   }
 }
 
-async function set(on) {
-  const r = await fetch("/__exam", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-FoCT-Admin": "1" },
-    body: JSON.stringify({ on, title: $("title").value.trim() }),
-  });
-  if (!r.ok) { alert(await r.text()); return; }
-  typed = false;
-  show(await r.json());
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: ADMIN, body: JSON.stringify(body || {}) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
 }
 
-$("start").onclick = () => set(true);
-$("stop").onclick = () => set(false);
+async function collect() {
+  $("msg").textContent = "Asking every PC for its latest work…";
+  const c = await post("/__exam/collect");
+  $("msg").textContent = c.asked ? `${c.answered} of ${c.asked} online PC${c.asked > 1 ? "s" : ""} sent their latest work.` : "";
+  return c;
+}
+
+async function run(fn) {
+  if (busy) return;
+  busy = true;
+  document.querySelectorAll("button").forEach((b) => { b.dataset.was = b.disabled; b.disabled = true; });
+  try { await fn(); } catch (e) { alert(e.message); }
+  document.querySelectorAll("button").forEach((b) => { b.disabled = b.dataset.was === "true"; });
+  busy = false;
+  typed = false;
+  load();
+}
+
+$("start").onclick = () => run(async () => {
+  await post("/__exam", { on: true, title: $("title").value.trim(), register: $("register").checked });
+});
+$("stop").onclick = () => run(async () => {
+  if (exam && exam.register) {
+    if (!confirm("Collect every student's latest work and end the exam?")) return;
+    await collect();
+  }
+  await post("/__exam", { on: false });
+});
+$("download").onclick = () => run(async () => {
+  if (exam && exam.on) await collect();
+  else $("msg").textContent = "";
+  const a = document.createElement("a");
+  a.href = "/__exam/zip?t=" + Date.now();
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  $("msg").textContent += " The zip is downloading to this PC’s Downloads folder.";
+});
 load();
-setInterval(load, 5000);
+setInterval(() => { if (!busy) load(); }, 4000);
 </script>
 </body>
 </html>

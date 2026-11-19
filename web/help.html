@@ -131,6 +131,7 @@
     <li><b>Out of memory / blank page:</b> close other tabs; the Office and Java labs need a PC with at least 4&nbsp;GB of RAM.</li>
     <li><b>Lost work:</b> open the same lab on the same PC and browser: the last draft is restored automatically.</li>
     <li><b>Copy and paste do not work and the page has a red &ldquo;EXAM MODE&rdquo; frame:</b> the lab is in exam mode. Your teacher ends it after the exam, and the page returns to normal by itself.</li>
+    <li><b>The page asks for your name and enrolment no.:</b> an exam is starting. Type them carefully; they name the folder your teacher receives. Your work in the labs, and every file you save or download, then goes to your teacher by itself. To hand in any other file, for example one from your Downloads folder, use <b>Submit files</b> in the red bar.</li>
   </ul>
 
   <h2 id="admin">For lab administrators</h2>
@@ -153,7 +154,15 @@ python server/serve.py --https    (also serve secure mode on port 8443)</pre>
       <li>turns off copy, cut and paste, and blocks dragging text or files in;</li>
       <li>shows a red frame and a watermark with the exam title, the PC&rsquo;s address and the time.</li>
     </ul>
-    <p>Press <b>End exam mode</b> afterwards. Only the server PC can switch it, and it stays on if the server restarts. It stops casual copying. For strict exams, also turn off the browser&rsquo;s developer tools with the Edge or Chrome policy <i>DeveloperToolsAvailability</i>&nbsp;=&nbsp;2.</p>
+    <p><b>Collecting the students&rsquo; work:</b> leave <i>Students sign in with their name and enrolment no.</i> ticked.</p>
+    <ul>
+      <li>Each student enters these once.</li>
+      <li>Their lab work, every file they save or download, and files they hand in with <b>Submit files</b> then reach the server PC by themselves.</li>
+      <li>The control page lists who has signed in.</li>
+      <li><b>Download submissions (.zip)</b> asks every PC for its latest work, then saves <i>Exam&nbsp;title</i>.zip to your Downloads folder: one folder per student, named <i>Name_Enrolment</i>, and a roster.csv.</li>
+      <li>The same folders are kept on the server PC in <code>submissions</code>.</li>
+    </ul>
+    <p>Press <b>Collect work and end exam</b> afterwards. Only the server PC can switch exam mode or download submissions, and exam mode stays on if the server restarts. It stops casual copying. For strict exams, also turn off the browser&rsquo;s developer tools with the Edge or Chrome policy <i>DeveloperToolsAvailability</i>&nbsp;=&nbsp;2.</p>
   </div>
 
   <h2 id="credits">Open-source credits</h2>
