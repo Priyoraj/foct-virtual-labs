@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exam mode · FoCT Virtual Labs</title>
+<link rel="icon" type="image/png" href="/assets/brand/favicon-32.png">
+<style>
+  :root { color-scheme: light dark; --navy: #342e6c; --red: #dc2626; --bg: #f5f4fb; --card: #fff; --line: #e3e1f2; --text: #1d1b33; --muted: #6b6890; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15142a; --card: #1f1d3a; --line: #34325c; --text: #ecebf8; --muted: #a9a6cf; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.5 "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  main { max-width: 640px; margin: 40px auto; padding: 0 16px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  header img { width: 46px; height: 46px; border-radius: 50%; background: #fff; padding: 2px; }
+  header h1 { font-size: 1.4rem; margin: 0; }
+  header small { display: block; color: var(--muted); font-size: .85rem; font-weight: 500; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; box-shadow: 0 6px 24px rgba(30, 20, 90, .08); }
+  .card.on { border-color: var(--red); box-shadow: 0 0 0 3px rgba(220, 38, 38, .18); }
+  .state { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; font-weight: 700; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: #9ca3af; flex: none; }
+  .on .dot { background: var(--red); box-shadow: 0 0 0 5px rgba(220, 38, 38, .2); }
+  .muted { color: var(--muted); font-size: .93rem; }
+  label { display: block; font-weight: 600; margin: 18px 0 6px; }
+  input { width: 100%; padding: 10px 12px; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+  .row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  button { font: inherit; font-weight: 700; padding: 10px 18px; border-radius: 10px; border: 0; cursor: pointer; color: #fff; }
+  button:disabled { opacity: .45; cursor: default; }
+  #start { background: var(--red); }
+  #stop { background: var(--navy); }
+  h2 { font-size: 1.05rem; margin: 28px 0 6px; }
+  ul { padding-left: 1.2em; margin: 0; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/assets/brand/adtu-seal.png" alt="">
+    <h1>Exam mode<small>FoCT Virtual Labs &middot; this page works only on the server PC</small></h1>
+  </header>
+
+  <div class="card" id="card">
+    <div class="state"><span class="dot"></span><span id="stateText">Checking&hellip;</span></div>
+    <p class="muted" id="since"></p>
+    <label for="title">Exam title (shown in the watermark)</label>
+    <input id="title" maxlength="120" placeholder="e.g. Programming in C, practical exam, CSE 3rd semester">
+    <div class="row">
+      <button id="start">Start exam mode</button>
+      <button id="stop">End exam mode</button>
+    </div>
+    <p class="muted" id="pcs"></p>
+  </div>
+
+  <h2>What exam mode does</h2>
+  <ul class="muted">
+    <li>On every lab page, copy, cut and paste stop working: keyboard shortcuts, right-click menus and editor menus. Dragging text or files into a page is blocked too.</li>
+    <li>A red frame and a watermark with the exam title, the PC&rsquo;s network address and the time cover every page, including screenshots and printouts.</li>
+    <li>Open pages switch within about 10 seconds, and nothing needs to be installed. Exam mode stays on if the server restarts.</li>
+    <li>It stops casual copying. A student who knows the browser&rsquo;s developer tools could still get around it, so for strict exams also turn off developer tools on the lab PCs with a browser policy (Edge and Chrome: <i>DeveloperToolsAvailability</i> = 2).</li>
+  </ul>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let typed = false;
+$("title").addEventListener("input", () => { typed = true; });
+
+function show(e) {
+  $("card").classList.toggle("on", !!e.on);
+  $("stateText").textContent = e.on ? "Exam mode is ON" : "Exam mode is off";
+  const since = e.on && e.since ? new Date(e.since * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  $("since").textContent = e.on ? `Started at ${since}${e.title ? " · " + e.title : ""}` : "Students can copy and paste as usual.";
+  $("start").textContent = e.on ? "Update title" : "Start exam mode";
+  $("stop").disabled = !e.on;
+  if (!typed) $("title").value = e.title || "";
+}
+
+async function load() {
+  try {
+    const [e, s] = await Promise.all([
+      fetch("/__exam", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/__status", { cache: "no-store" }).then((r) => r.json()),
+    ]);
+    show(e);
+    $("pcs").textContent = `${s.active_pcs_5min} PC${s.active_pcs_5min === 1 ? "" : "s"} used the lab in the last 5 minutes.`;
+  } catch {
+    $("stateText").textContent = "Cannot reach the lab server";
+  }
+}
+
+async function set(on) {
+  const r = await fetch("/__exam", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-FoCT-Admin": "1" },
+    body: JSON.stringify({ on, title: $("title").value.trim() }),
+  });
+  if (!r.ok) { alert(await r.text()); return; }
+  typed = false;
+  show(await r.json());
+}
+
+$("start").onclick = () => set(true);
+$("stop").onclick = () => set(false);
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

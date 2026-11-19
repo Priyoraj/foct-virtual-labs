@@ -20,6 +20,7 @@ import http.server
 import json
 import os
 import posixpath
+import re
 import socket
 import ssl
 import sys
@@ -94,6 +95,57 @@ class RuntimeGeneration:
 GENERATION = RuntimeGeneration()
 
 
+# ---------------------------------------------------------------- exam mode
+# Every page the server sends gets web/assets/js/exam.js. It polls /__exam; while exam mode is
+# on, the page blocks copy and paste and shows an exam watermark. Exam mode is switched on the
+# server PC at /__exam/control and survives a server restart (server/exam-state.json).
+EXAM_FILE = Path(__file__).resolve().parent / "exam-state.json"
+EXAM_CONTROL = Path(__file__).resolve().parent / "exam-control.html"
+EXAM_TAG = b'<script src="/assets/js/exam.js"></script>'
+EXAM_TAG_VERSION = "x1"   # change with EXAM_TAG so browsers replace pages they cached with the old tag
+HEAD_RE = re.compile(rb"<head(?:\s[^>]*)?>", re.I)
+HTML_RE = re.compile(rb"<html(?:\s[^>]*)?>", re.I)
+DOCTYPE_RE = re.compile(rb"\s*<!doctype[^>]*>", re.I)
+
+
+def add_exam_tag(page):
+    """Put the exam script first in <head>, so it is in place before the page's own scripts."""
+    m = HEAD_RE.search(page, 0, 65536) or HTML_RE.search(page, 0, 65536) or DOCTYPE_RE.match(page)
+    at = m.end() if m else 0
+    return page[:at] + EXAM_TAG + page[at:]
+
+
+class ExamMode:
+    def __init__(self, path):
+        self.path = path
+        self.lock = threading.Lock()
+        self.state = {"on": False, "title": "", "since": None}
+        try:
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.state.update(on=bool(saved.get("on")), title=str(saved.get("title") or "")[:120],
+                              since=saved.get("since"))
+        except (OSError, ValueError, AttributeError):
+            pass
+
+    def get(self):
+        with self.lock:
+            return dict(self.state)
+
+    def set(self, on, title):
+        with self.lock:
+            if on != self.state["on"]:
+                self.state["since"] = time.time() if on else None
+            self.state["on"], self.state["title"] = on, title[:120]
+            try:
+                self.path.write_text(json.dumps(self.state), encoding="utf-8")
+            except OSError:
+                pass
+            return dict(self.state)
+
+
+EXAM = ExamMode(EXAM_FILE)
+
+
 class Stats:
     def __init__(self):
         self.lock = threading.Lock()
@@ -137,9 +189,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.handle_request(head=True)
 
     def do_POST(self):
+        if urllib.parse.urlsplit(self.path).path == "/__exam":
+            return self.exam_post()
+        self.deny()
+
+    def deny(self):
+        self.close_connection = True   # the request body is not read
         self.send_simple(405, "This server does not accept uploads. Your files stay on your computer.")
 
-    do_PUT = do_DELETE = do_PATCH = do_POST
+    do_PUT = do_DELETE = do_PATCH = deny
 
     def handle_request(self, head):
         url = urllib.parse.urlsplit(self.path)
@@ -148,6 +206,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = json.dumps(dict(self.info, **STATS.snapshot(), version=VERSION,
                                    secure=isinstance(self.connection, ssl.SSLSocket)), indent=1)
             return self.send_simple(200, body, "application/json; charset=utf-8", head=head)
+        if path == "/__exam":
+            body = json.dumps(dict(EXAM.get(), client=self.client_address[0], now=time.time()))
+            return self.send_simple(200, body, "application/json; charset=utf-8", head=head)
+        if path == "/__exam/control":
+            if not self.is_local():
+                return self.send_simple(403, "Exam mode can only be switched on the server PC.", head=head, page=True)
+            try:
+                page = EXAM_CONTROL.read_text(encoding="utf-8")
+            except OSError:
+                return self.send_simple(404, "Not found", head=head, page=True)
+            return self.send_simple(200, page, "text/html; charset=utf-8", head=head)
         target = self.resolve(path)
         if target is None:
             return self.send_simple(404, "Not found", head=head, page=True)
@@ -187,21 +256,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def send_file(self, target, path, head):
         ctype = MIME.get(target.suffix.lower(), "application/octet-stream")
-        encoding, send_path = None, target
+        encoding, send_path, page = None, target, None
         accept = self.headers.get("Accept-Encoding", "")
         try:
             st = target.stat()
-            for enc, ext in (("br", ".br"), ("gzip", ".gz")):
-                if enc in accept:
-                    cand = target.with_name(target.name + ext)
-                    if cand.is_file() and cand.stat().st_mtime >= st.st_mtime - 1:
-                        encoding, send_path = enc, cand
-                        break
-            sst = send_path.stat()
+            if ctype.startswith("text/html") and self.wants_page():
+                page = add_exam_tag(target.read_bytes())   # small, sent uncompressed
+            else:
+                for enc, ext in (("br", ".br"), ("gzip", ".gz")):
+                    if enc in accept:
+                        cand = target.with_name(target.name + ext)
+                        if cand.is_file() and cand.stat().st_mtime >= st.st_mtime - 1:
+                            encoding, send_path = enc, cand
+                            break
+            size = len(page) if page is not None else send_path.stat().st_size
         except OSError:
             return self.send_simple(404, "Not found", head=head, page=True)
 
-        etag = f'W/"{int(st.st_mtime)}-{st.st_size}-{encoding or "id"}"'
+        variant = EXAM_TAG_VERSION if page is not None else (encoding or "id")
+        etag = f'W/"{int(st.st_mtime)}-{st.st_size}-{variant}"'
         last_mod = email.utils.formatdate(st.st_mtime, usegmt=True)
         caching = self.caching_headers(path, ctype)
         if self.not_modified(etag, st.st_mtime):
@@ -217,7 +290,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         self.send_response(200)
         self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(sst.st_size))
+        self.send_header("Content-Length", str(size))
         self.send_header("Last-Modified", last_mod)
         self.send_header("ETag", etag)
         if encoding:
@@ -229,7 +302,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.common_headers(path)
         self.end_headers()
         sent = 0
-        if not head:
+        if not head and page is not None:
+            try:
+                self.wfile.write(page)
+                sent = len(page)
+            except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, socket.timeout):
+                self.close_connection = True
+        elif not head:
             try:
                 with open(send_path, "rb") as f:
                     while True:
@@ -251,7 +330,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         the cached copies stop matching, and browsers fetch the new files, never a mix."""
         gen = GENERATION.get(self.web_root)
         if ctype.startswith("text/html"):
-            return [("Cache-Control", "no-cache"), ("Vary", "Accept-Encoding"),
+            return [("Cache-Control", "no-cache"), ("Vary", "Accept-Encoding, Sec-Fetch-Dest"),
                     ("Set-Cookie", f"{RT_COOKIE}={gen}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly")]
         if path.startswith(MANAGED) and path not in OWN_IN_MANAGED:
             # Without the current cookie (first visit, cookies blocked) fall back to revalidating.
@@ -259,6 +338,40 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return [("Cache-Control", f"max-age={RT_MAX_AGE}" if keep else "no-cache"),
                     ("Vary", "Accept-Encoding, Cookie")]
         return [("Cache-Control", "no-cache"), ("Vary", "Accept-Encoding")]
+
+    def wants_page(self):
+        """True when the browser is opening the HTML as a page or frame (not reading it as data)."""
+        dest = self.headers.get("Sec-Fetch-Dest")
+        if dest:
+            return dest in ("document", "iframe", "frame", "embed", "object")
+        return "text/html" in self.headers.get("Accept", "")
+
+    def is_local(self):
+        """The request comes from the server PC itself."""
+        ip = self.client_address[0]
+        return ip.startswith("127.") or ip == "::1" or ip in (self.info.get("lan_ips") or [])
+
+    def exam_post(self):
+        # Only the server PC may switch exam mode. The custom header stops other web pages
+        # (cross-site requests) from doing it through the administrator's browser.
+        if (not self.is_local() or self.headers.get("X-FoCT-Admin") != "1"
+                or self.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none")):
+            self.close_connection = True
+            return self.send_simple(403, "Exam mode can only be switched on the server PC.")
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            if not 0 < n <= 4096:
+                raise ValueError
+            data = json.loads(self.rfile.read(n))
+            if not isinstance(data, dict) or "on" not in data:
+                raise ValueError
+            state = EXAM.set(bool(data["on"]), str(data.get("title") or "").strip())
+        except (ValueError, TypeError):
+            self.close_connection = True
+            return self.send_simple(400, "Send JSON like {\"on\": true, \"title\": \"...\"}.")
+        title = f": {state['title']}" if state["on"] and state["title"] else ""
+        print(f"{time.strftime('%H:%M')}  EXAM MODE {'ON' if state['on'] else 'OFF'}{title}", flush=True)
+        self.send_simple(200, json.dumps(state), "application/json; charset=utf-8")
 
     def cookie(self, name):
         for part in self.headers.get("Cookie", "").split(";"):
@@ -435,10 +548,14 @@ def main():
         for ip in ips or ["localhost"]:
             print(f" Secure (HTTPS)   :  https://{ip}:{args.https_port}/")
         print("   (each PC must trust the lab certificate once - see Help > Secure mode)")
+    print(f" Exam mode        :  http://localhost:{args.port}/__exam/control  (on this PC only)")
     print(line)
     print(" Students only need a browser (Chrome / Edge / Firefox). Their files are")
     print(" saved on their own PC; nothing is uploaded here. Press Ctrl+C to stop.")
     print(line, flush=True)
+    exam = EXAM.get()
+    if exam["on"]:
+        print(f" EXAM MODE IS ON{': ' + exam['title'] if exam['title'] else ''}  (end it on the page above)", flush=True)
 
     last = None
     try:

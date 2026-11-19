@@ -90,18 +90,51 @@ impersonate public websites. Keep `server/certs/foct-lab-ca.key` on the server o
 university has a real certificate (e.g. for `vlabs.adtu.in`), use
 `--cert fullchain.pem --key privkey.pem` instead.
 
+## Exam mode
+
+On the server PC, open **http://localhost:8080/__exam/control**. The server window prints this
+address. The page works only on the server PC.
+
+Type the exam title and press **Start exam mode**. Within about 10 seconds every open lab page,
+including Jupyter, Office and draw.io:
+
+* **turns off copy, cut and paste**: keyboard shortcuts, right-click and editor menus, and the
+  browser's clipboard API;
+* **blocks dragging** text or files into the page;
+* **shows an exam watermark**: a red frame and a diagonal mark with the exam title, the PC's
+  network address and the time. It also appears in screenshots and printouts.
+
+**End exam mode** turns it off the same way. Exam mode stays on if the server restarts; the
+state is kept in `server/exam-state.json`.
+
+How it works:
+
+* The server adds `web/assets/js/exam.js` to every page it sends.
+* The script checks `/__exam` every 8 seconds.
+* Its listeners run before any editor sees the event.
+
+Only the server PC can switch exam mode, and other web sites cannot do it through the
+administrator's browser.
+
+Exam mode stops casual copying, but a student who knows the browser's developer tools could get
+around it. For strict exams, also turn off developer tools on the lab PCs with the Edge or
+Chrome policy `DeveloperToolsAvailability` = 2. USB drives or other programs are best blocked
+by the lab's usual exam setup.
+
 ## Project layout
 
 ```
 start-server.bat / .sh     launchers
 server/serve.py            LAN web server (standard library only): gzip, caching, isolation headers, /__status
 server/make_cert.py        lab CA + HTTPS certificate
+server/exam-control.html   exam mode switch (served at /__exam/control, server PC only)
 tools/setup.py             downloads and patches all third-party runtimes into web/
 tools/javasdk.py           repairs the TeaVM javac class library (TeaVM @Rename/@Remove)
 tools/make_brand.py        cuts the ADtU logo into web assets
 tools/jupyterlite/         JupyterLite config and starter notebook
 tools/office/              blank Word/Excel/PowerPoint templates
 web/index.html, help.html  portal and help
+web/assets/js/exam.js      exam mode in every page (clipboard block, watermark)
 web/apps/code/             C / C++ / Java / Python IDE (Monaco editor, workers, WASI runtime)
 web/apps/netsim/           FoCT NetSim network simulator
 web/apps/sql/              SQL Lab (SQLite and PostgreSQL workers, sample databases)

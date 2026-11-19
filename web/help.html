@@ -130,6 +130,7 @@
     <li><b>The program waits forever:</b> it is probably waiting for input &mdash; type in the Output panel. Use <b>Stop</b> to end a program that loops forever.</li>
     <li><b>Out of memory / blank page:</b> close other tabs; the Office and Java labs need a PC with at least 4&nbsp;GB of RAM.</li>
     <li><b>Lost work:</b> open the same lab on the same PC and browser: the last draft is restored automatically.</li>
+    <li><b>Copy and paste do not work and the page has a red &ldquo;EXAM MODE&rdquo; frame:</b> the lab is in exam mode. Your teacher ends it after the exam, and the page returns to normal by itself.</li>
   </ul>
 
   <h2 id="admin">For lab administrators</h2>
@@ -147,6 +148,12 @@ python server/serve.py --https    (also serve secure mode on port 8443)</pre>
       <li>Runtimes are downloaded again only after <code>tools/setup.py</code> installs a new version.</li>
       <li>After the PCs are re-imaged, open each lab once on every PC before class.</li>
     </ul>
+    <p><b>Exam mode:</b> on the server PC, open <code>http://localhost:8080/__exam/control</code>, type the exam title and press <b>Start exam mode</b>. Within about 10&nbsp;seconds every lab page (Jupyter, Office and draw.io included):</p>
+    <ul>
+      <li>turns off copy, cut and paste, and blocks dragging text or files in;</li>
+      <li>shows a red frame and a watermark with the exam title, the PC&rsquo;s address and the time.</li>
+    </ul>
+    <p>Press <b>End exam mode</b> afterwards. Only the server PC can switch it, and it stays on if the server restarts. It stops casual copying. For strict exams, also turn off the browser&rsquo;s developer tools with the Edge or Chrome policy <i>DeveloperToolsAvailability</i>&nbsp;=&nbsp;2.</p>
   </div>
 
   <h2 id="credits">Open-source credits</h2>

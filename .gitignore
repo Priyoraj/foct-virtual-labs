@@ -24,6 +24,9 @@
 *.gz
 *.br
 
+# Exam mode on/off, kept across server restarts
+/server/exam-state.json
+
 # HTTPS certificates made by server/make_cert.py (the CA private key must never leave the server)
 /server/certs/
 /web/foct-lab-ca.crt
