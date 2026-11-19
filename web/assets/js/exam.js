@@ -4,15 +4,23 @@
    server PC (http://localhost:8080/__exam/control). While it is on, each page:
      - blocks copy, cut and paste (keyboard, menus, the async clipboard API) and dropping text or
        files, in the page and in its frames;
-     - shows a red frame and a watermark with the exam title, this PC's address and the time;
-     - if the teacher asked students to sign in: asks for the student's name and enrolment number
-       once per exam on this PC, then sends their work to the server -
-         * lab drafts changed during the exam (C, C++, Java, Python, Lex & Yacc, SQL, MongoDB,
-           SPICE, NetSim, Jupyter notebooks), at most once a minute and at once when the teacher
-           collects;
-         * every file saved or downloaded from a lab ("Saved files");
-         * files handed in with the Submit files button ("Submitted files").
-   It stops casual copying; it cannot stop someone who switches it off with developer tools. */
+     - shows a red frame and a watermark with the exam title, the student, this PC's address and
+       the time, and a countdown when the exam has a time limit;
+     - with the teacher's options: blocks opening files and the IDE's example programs, the
+       right-click menu, developer-tools and view-source keys and printing; notices leaving the
+       exam window, leaving full screen, large insertions in an editor and a second screen;
+     - checks itself every few seconds: developer tools open, or a protection removed, locks the
+       exam on this PC until everything is back to normal (or the teacher lets the student back in);
+     - shows "not part of the exam" on labs the teacher did not choose, "time is up" at the end,
+       and messages from the teacher;
+     - if students sign in: asks for name, enrolment number (and the exam code), then sends their
+       work to the server: lab drafts changed during the exam (C, C++, Java, Python, Lex & Yacc,
+       SQL, MongoDB, SPICE, NetSim, Jupyter), every file saved or downloaded from a lab, and files
+       handed in with Submit files.
+   The server enforces its part itself (which labs are served, and only to signed-in PCs that keep
+   checking in and are not locked). What runs here stops casual cheating; someone who rewrites
+   this script with developer tools could still get around it, so strict exams should also turn
+   developer tools off with the browser policy DeveloperToolsAvailability = 2. */
 (() => {
   "use strict";
   if (window.__foctExamLoaded) return;
@@ -20,15 +28,18 @@
 
   const POLL_MS = 8000;
   const SYNC_MS = 60000;
+  const CHECK_MS = 3000;
   const KEY = "foct.exam";
   let isTop = false, canReadTop = false;
   try { isTop = window.top === window; void window.top.location.href; canReadTop = true; } catch { /* other origin */ }
 
-  const ls = {
-    get(k, d = null) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage blocked */ } },
-    del(k) { try { localStorage.removeItem(k); } catch { /* storage blocked */ } },
-  };
+  const store = (s) => ({
+    get(k, d = null) { try { const v = s.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { s.setItem(k, JSON.stringify(v)); } catch { /* storage blocked */ } },
+    del(k) { try { s.removeItem(k); } catch { /* storage blocked */ } },
+  });
+  let ls, ss;
+  try { ls = store(localStorage); ss = store(sessionStorage); } catch { ls = ss = store({ getItem: () => null, setItem() {}, removeItem() {} }); }
 
   // ------------------------------------------------------------ state
   // The top page asks the server; frames use the top page's answer (read at the moment it matters).
@@ -37,22 +48,35 @@
   if (saved && Date.now() - saved.at < 12 * 3600e3) state = saved;          // until the first answer
   let skew = 0;                                                             // server clock - this PC's clock (ms)
   let me = null;                                                            // { token, name, enrolment, folder }
+  let serverLock = null, localLock = null;
   const meKey = () => `foct.exam.me.${state.id}`;
   const loadMe = () => { me = state.id ? ls.get(meKey()) : null; };
   loadMe();
   const topState = () => { try { return window.top.__foctExam; } catch { return undefined; } };
-  const active = () => {
-    if (isTop || !canReadTop) return !!state.on;
-    const t = topState();
-    return t ? !!t.on : !!state.on;
-  };
+  const S = () => (isTop || !canReadTop ? state : (topState() || state));
+  const active = () => !!S().on;
+  const opts = () => S().opts || {};
   if (isTop) window.__foctExam = state;
-  const topApi = () => { try { return window.top.__foctExamApi || null; } catch { return null; } };
+  const topApi = () => { try { return isTop ? null : window.top.__foctExamApi || null; } catch { return null; } };
   const collecting = () => {
     if (isTop || !canReadTop) return !!(state.on && state.register && me);
     const api = topApi();
     return !!(api && api.collecting());
   };
+  const currentLock = () => serverLock || localLock;
+  const serverNow = () => Date.now() + skew;
+
+  const CODE_LABS = ["c", "cpp", "java", "python", "lex"];
+  function labOf(pathname, search) {
+    if (pathname.startsWith("/apps/code/")) {
+      const l = new URLSearchParams(search || "").get("lang");
+      return CODE_LABS.includes(l) ? l : "c";
+    }
+    const m = /^\/apps\/(notebook|sql|mongo|cdtools|spice|circuit|netsim|drawio|office)\//.exec(pathname);
+    return m ? (m[1] === "notebook" ? "jupyter" : m[1]) : null;
+  }
+  const PAGE_LAB = labOf(location.pathname, location.search);
+  const labAllowed = (lab) => !lab || !S().labs || S().labs.includes(lab);
 
   async function poll() {
     const token = me ? me.token : null;
@@ -63,21 +87,25 @@
   }
 
   function apply(s, token) {
-    const wasOn = !!state.on, wasId = state.id;
+    const wasOn = !!state.on, wasId = state.id, wasUp = !!state.timeup;
     skew = s.now * 1000 - Date.now();
     state = { on: !!s.on, title: String(s.title || ""), since: s.since || null, id: s.id || null,
-              register: !!s.register, collect: s.collect || 0, client: String(s.client || ""), at: Date.now() };
+              register: !!s.register, collect: s.collect || 0, client: String(s.client || ""),
+              labs: Array.isArray(s.labs) ? s.labs : null, code: !!s.code, ends_at: s.ends_at || null,
+              timeup: !!s.timeup, opts: s.opts || {}, message: s.message || null, at: Date.now() };
     if (isTop) window.__foctExam = state;
     ls.set(KEY, state);
     if (state.id !== wasId || !me) loadMe();
     if (me && token === me.token && state.on && state.register && !s.you) { ls.del(meKey()); me = null; }   // the server no longer knows us
-    if (me && s.you) me.saved = s.you.saved;
+    if (me && s.you) { me.saved = s.you.saved; serverLock = s.you.locked || null; }
+    if (!state.on) { serverLock = localLock = null; }
     render();
     if (isTop && wasOn !== state.on) {
       toast(state.on ? "Exam mode is on: copy and paste are turned off." : "Exam mode has ended.");
     }
     if (!isTop) return;
-    if (state.on && state.register && !me) signIn();
+    if (state.on && state.timeup && !wasUp) toast("Time is up.");
+    if (state.on && state.register && !me && !state.timeup && labAllowed(PAGE_LAB)) signIn();
     else closeSignIn();
     if (collecting()) {
       const k = `foct.exam.collected.${state.id}`;
@@ -86,9 +114,35 @@
         syncWork(state.collect);
       }
     }
+    showMessage();
   }
 
-  // ------------------------------------------------------------ clipboard
+  // ------------------------------------------------------------ reporting incidents
+  const blockedCounts = {};
+  function countBlocked(what) {
+    if (!isTop) { const api = topApi(); if (api) api.count(what); return; }
+    blockedCounts[what] = (blockedCounts[what] || 0) + 1;
+  }
+  async function report(kind, detail = "", extra = {}) {   // -> the lock the server now has for us
+    if (!isTop) { const api = topApi(); return api ? api.report(kind, detail, extra) : null; }
+    if (!me || !state.on) return null;
+    try {
+      const r = await fetch("/__exam/event", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-FoCT-Token": me.token },
+        body: JSON.stringify({ kind, detail, ...extra }),
+      });
+      if (r.ok) { serverLock = (await r.json()).locked || null; render(); }
+    } catch { /* reported again next time */ }
+    return serverLock;
+  }
+  function flushBlocked() {
+    for (const [what, count] of Object.entries(blockedCounts)) {
+      delete blockedCounts[what];
+      if (me) report("blocked", what, { count });
+    }
+  }
+
+  // ------------------------------------------------------------ clipboard, dropping, dragging
   const hasSelection = (e) => {
     const t = e.target;
     if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT")) {
@@ -97,20 +151,22 @@
     const sel = document.getSelection();
     return !!(sel && String(sel).length);
   };
-  function block(e, say) {
+  function block(e, say, what) {
     if (!active()) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    if (say) toast("Copy and paste are turned off during the exam.");
+    if (e.__foctCanary) return;                        // our own self-test
+    if (what) countBlocked(what);
+    if (say) toast(say === true ? "Copy and paste are turned off during the exam." : say);
   }
   // Capture listeners on window run before any editor (Monaco, CodeMirror, ONLYOFFICE) sees the event.
-  window.addEventListener("copy", (e) => block(e, hasSelection(e)), true);
-  window.addEventListener("cut", (e) => block(e, hasSelection(e)), true);
-  window.addEventListener("paste", (e) => block(e, true), true);
+  window.addEventListener("copy", (e) => { const s = hasSelection(e); block(e, s, s && "copy"); }, true);
+  window.addEventListener("cut", (e) => { const s = hasSelection(e); block(e, s, s && "copy"); }, true);
+  window.addEventListener("paste", (e) => block(e, true, "paste"), true);
   window.addEventListener("beforeinput", (e) => {
-    if (/^insertFrom(Paste|Drop|YankPaste)/.test(e.inputType || "")) block(e, true);
+    if (/^insertFrom(Paste|Drop|YankPaste)/.test(e.inputType || "")) block(e, true, "paste");
   }, true);
-  window.addEventListener("drop", (e) => block(e, true), true);
+  window.addEventListener("drop", (e) => block(e, true, "drop"), true);
   window.addEventListener("dragover", (e) => {
     if (active()) { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "none"; }
   }, true);
@@ -119,18 +175,72 @@
     if (types.includes("text/plain") || types.includes("text/html")) block(e, false);
   }, true);
   // The async Clipboard API (secure pages only) does not fire events, so wrap it.
+  const cbWrapped = {};
   const cb = navigator.clipboard;
   if (cb) {
     for (const m of ["read", "readText", "write", "writeText"]) {
       if (typeof cb[m] !== "function") continue;
       const original = cb[m].bind(cb);
       try {
-        cb[m] = (...args) => (active()
+        cb[m] = cbWrapped[m] = (...args) => (active()
           ? Promise.reject(new DOMException("The clipboard is turned off during the exam.", "NotAllowedError"))
           : original(...args));
       } catch { /* read-only in this browser */ }
     }
   }
+
+  // ------------------------------------------------------------ opening files, examples, keys, printing
+  const OPEN_MSG = "Opening files is turned off during the exam. Use Submit files to hand in a file.";
+  const blockOpen = () => active() && opts().block_open;
+  const blockKeys = () => active() && opts().block_keys;
+  const inputClick = HTMLInputElement.prototype.click;
+  function ourInputClick(...args) {
+    if (this.type === "file" && !this.__foctSubmit && blockOpen()) { countBlocked("open"); toast(OPEN_MSG); return undefined; }
+    return inputClick.apply(this, args);
+  }
+  HTMLInputElement.prototype.click = ourInputClick;
+  for (const fn of ["showOpenFilePicker", "showDirectoryPicker"]) {
+    if (typeof window[fn] !== "function") continue;
+    const original = window[fn].bind(window);
+    window[fn] = (...args) => {
+      if (!blockOpen()) return original(...args);
+      countBlocked("open");
+      toast(OPEN_MSG);
+      return Promise.reject(new DOMException("Opening files is turned off during the exam.", "AbortError"));
+    };
+  }
+  document.addEventListener("click", (e) => {
+    const t = e.target;
+    if (!t || !blockOpen()) return;
+    if (t.tagName === "INPUT" && t.type === "file" && !t.__foctSubmit) {
+      e.preventDefault(); e.stopImmediatePropagation(); countBlocked("open"); toast(OPEN_MSG);
+    } else if (location.pathname.startsWith("/apps/code/") && t.closest && t.closest("#examples button, #examples a")) {
+      e.preventDefault(); e.stopImmediatePropagation(); countBlocked("example");
+      toast("Example programs are not available during the exam.");
+    }
+  }, true);
+  window.addEventListener("keydown", (e) => {
+    const cover = coverEl();
+    if (cover && !cover.contains(e.target)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+    if (!blockKeys()) return;
+    const k = (e.key || "").toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+    const devtools = e.key === "F12" || (ctrl && e.shiftKey && ["i", "j", "c"].includes(k))
+      || (e.metaKey && e.altKey && ["i", "j", "c", "u"].includes(k)) || (e.ctrlKey && !e.shiftKey && !e.altKey && k === "u");
+    const print = ctrl && !e.shiftKey && k === "p";
+    if (!devtools && !print) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    countBlocked(print ? "print" : "devtoolskey");
+    toast(print ? "Printing is turned off during the exam." : "Developer tools are turned off during the exam.");
+  }, true);
+  window.addEventListener("contextmenu", (e) => {        // the browser's menu (with Inspect) goes; the labs' own menus stay
+    if (blockKeys()) { e.preventDefault(); countBlocked("rightclick"); }
+  }, true);
+  const origPrint = window.print;
+  window.print = function () {
+    if (blockKeys()) { countBlocked("print"); toast("Printing is turned off during the exam."); return undefined; }
+    return origPrint.call(window);
+  };
 
   // ------------------------------------------------------------ sending work to the teacher
   // cyrb53: a quick hash, to send only what changed.
@@ -263,7 +373,6 @@
     Promise.resolve(data).then((d) => send(path, d)).then(markSent).catch(() => setStatus("A saved file was not sent", true));
   }
   window.__foctExamSaved = capture;                  // called by the labs' own Save (foct.js)
-  if (isTop) window.__foctExamApi = { capture, collecting };
   function captureAnchor(a) {
     if (!collecting() || a.__foctTaken) return;
     const href = a.href || "";
@@ -274,14 +383,154 @@
     capture(a.getAttribute("download") || "download", fetch(href).then((r) => r.blob()));
   }
   const anchorClick = HTMLAnchorElement.prototype.click;
-  HTMLAnchorElement.prototype.click = function (...args) {
+  function ourAnchorClick(...args) {
     try { captureAnchor(this); } catch { /* never block a download */ }
     return anchorClick.apply(this, args);
-  };
+  }
+  HTMLAnchorElement.prototype.click = ourAnchorClick;
   document.addEventListener("click", (e) => {
     const a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
     if (a) captureAnchor(a);
   }, true);
+
+  // ------------------------------------------------------------ leaving the exam, full screen, editors, screens
+  // Every lab tab on this PC notes when it has the focus, so moving between lab tabs is not "leaving".
+  const FOCUS = "foct.exam.focus", AWAY = "foct.exam.away";
+  const tabId = Math.random().toString(36).slice(2);
+  const watching = () => isTop && collecting() && !state.timeup;
+  function markFocus() { if (isTop && document.hasFocus() && !document.hidden) ls.set(FOCUS, { tab: tabId, at: Date.now() }); }
+  let awayTimer = 0;
+  function maybeLeft() {
+    if (!watching()) return;
+    clearTimeout(awayTimer);
+    awayTimer = setTimeout(() => {
+      if (document.hasFocus() && !document.hidden) return;                // back already
+      const f = ls.get(FOCUS);
+      if (f && f.tab !== tabId && Date.now() - f.at < 2500) return;      // another lab tab has the focus
+      if (!ls.get(AWAY)) ls.set(AWAY, { since: Date.now() - 1500, exam: state.id });
+    }, 1500);
+  }
+  async function back() {
+    markFocus();
+    const a = ls.get(AWAY);
+    if (!a || !watching()) return;
+    ls.del(AWAY);
+    if (a.exam !== state.id) return;
+    const secs = (Date.now() - a.since) / 1000;
+    if (secs < 2) return;
+    const n = (ls.get(`foct.exam.left.${state.id}`) || 0) + 1;
+    ls.set(`foct.exam.left.${state.id}`, n);
+    await report("left", `${Math.round(secs)} s away`, { secs });
+    if (opts().leave !== "log" && !currentLock()) {
+      banner("warn", `You left the exam window (${n === 1 ? "once" : n + " times"}). This is reported to your teacher.`
+        + (opts().leave === "lock" ? ` After ${opts().leave_limit || 3} times the exam is paused on this PC.` : ""));
+    }
+  }
+  window.addEventListener("blur", maybeLeft);
+  window.addEventListener("focus", back);
+  document.addEventListener("visibilitychange", () => (document.hidden ? maybeLeft() : back()));
+  if (isTop) setInterval(markFocus, 1000);
+
+  const fsNeeded = () => isTop && active() && opts().fullscreen && !state.timeup && (!state.register || !!me);
+  document.addEventListener("fullscreenchange", () => {
+    if (!document.fullscreenElement && fsNeeded()) report("fullscreen", "left full screen");
+    render();
+  });
+
+  let monacoHooked = false;
+  function hookMonaco() {                                // text that appears 200+ characters at once
+    const m = window.monaco;
+    if (monacoHooked || !m || !m.editor || !m.editor.onDidCreateModel) return;
+    monacoHooked = true;
+    const watch = (model) => model.onDidChangeContent((e) => {
+      if (!active() || e.isFlush || e.isUndoing || e.isRedoing) return;
+      const big = Math.max(0, ...e.changes.map((c) => (c.text || "").length));
+      if (big >= 200) report("bigins", `${big} characters at once`);
+    });
+    m.editor.getModels().forEach(watch);
+    m.editor.onDidCreateModel(watch);
+  }
+
+  let twoScreens = false;
+  function checkScreens() {                              // only offered by browsers on secure (HTTPS) pages
+    if (!isTop || !("isExtended" in screen) || !collecting()) return;
+    const ext = !!screen.isExtended;
+    if (ext && !twoScreens) report("screen2", "a second screen is connected");
+    twoScreens = ext;
+  }
+  try { if (screen.addEventListener) screen.addEventListener("change", checkScreens); } catch { /* not supported */ }
+
+  // ------------------------------------------------------------ self-checks: developer tools and removed protections
+  // A paused "debugger" statement takes measurable time - it pauses only while developer tools are open.
+  const trap = (() => { try { return new Function("debugger"); } catch { return null; } })();   // eslint-disable-line no-new-func
+  function devtoolsOpen() {
+    if (!trap) return false;
+    const t = performance.now();
+    trap();
+    return performance.now() - t > 120;
+  }
+  let canaryEl = null;
+  function brokenProtection() {        // -> what was changed, or ""
+    if (!canaryEl) { canaryEl = document.createElement("div"); canaryEl.hidden = true; canaryEl.setAttribute("aria-hidden", "true"); }
+    mount(canaryEl);
+    for (const type of ["paste", "copy", "drop"]) {
+      let ev;
+      try { ev = type === "drop" ? new DragEvent("drop", { bubbles: true, cancelable: true }) : new ClipboardEvent(type, { bubbles: true, cancelable: true }); } catch { continue; }
+      ev.__foctCanary = true;
+      canaryEl.dispatchEvent(ev);
+      if (!ev.defaultPrevented) return `${type} protection removed`;
+    }
+    if (cbWrapped.readText && navigator.clipboard && navigator.clipboard.readText !== cbWrapped.readText) return "clipboard protection replaced";
+    if (HTMLAnchorElement.prototype.click !== ourAnchorClick) return "download capture replaced";
+    if (HTMLInputElement.prototype.click !== ourInputClick) return "file-open protection replaced";
+    if (isTop) {
+      for (const [el, what] of [[markEl, "watermark"], [frameEl, "exam frame"]]) {
+        if (!el || !el.__foctShown) continue;
+        if (!el.isConnected) return `${what} removed`;
+        const cs = getComputedStyle(el);
+        if (cs.display === "none" || cs.visibility === "hidden" || +cs.opacity < 0.5
+            || (el === markEl && !/svg/.test(cs.backgroundImage))) return `${what} hidden`;
+      }
+      if (styleEl && styleEl.__foctShown && (!styleEl.isConnected || styleEl.disabled || (styleEl.sheet && styleEl.sheet.disabled))) {
+        return "exam styles removed";
+      }
+    }
+    return "";
+  }
+  let lastTamper = "", normalStreak = 0;
+  async function tamper(kind, detail) {
+    if (!isTop) { const api = topApi(); if (api) api.tamper(kind, detail); return; }
+    const sig = kind + detail;
+    if (sig === lastTamper) return;                      // reported already
+    lastTamper = sig;
+    if (me && state.register) await report(kind, detail);
+    else if (opts().tamper_lock) localLock = { reason: kind === "devtools" ? "Developer tools were opened" : `Exam protection changed (${detail})`, auto: true };
+    render();
+  }
+  async function backToNormal() {
+    lastTamper = "";
+    if (localLock) { localLock = null; render(); }
+    if (serverLock && serverLock.auto && me) {
+      try {
+        const r = await fetch("/__exam/ok", { method: "POST", headers: { "X-FoCT-Token": me.token } });
+        if (r.ok) serverLock = (await r.json()).locked || null;
+      } catch { /* try again on the next check */ }
+      render();
+    }
+  }
+  function runChecks() {
+    if (!active() || (state.register && !me && isTop)) { normalStreak = 0; return; }
+    if (isTop) hookMonaco();
+    const dt = isTop && devtoolsOpen();
+    const broken = brokenProtection();
+    if (broken && isTop) render();                       // put the watermark back
+    if (dt) tamper("devtools", "");
+    else if (broken) tamper("tamper", broken);
+    if (dt || broken) { normalStreak = 0; return; }
+    if (isTop && lastTamper && !currentLock()) lastTamper = "";
+    const L = isTop && currentLock();
+    if (L && L.auto && ++normalStreak >= 3) { normalStreak = 0; backToNormal(); }
+  }
 
   // ------------------------------------------------------------ look
   const CSS = `
@@ -294,6 +543,8 @@
 .foct-exam-bar { right: 14px; bottom: 34px; display: flex; align-items: center; gap: 10px; padding: 5px 5px 5px 12px; max-width: calc(100vw - 28px);
   background: rgba(185, 28, 28, .95); box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
 .foct-exam-bar .who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; font-weight: 700; }
+.foct-exam-bar .left { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+.foct-exam-bar .left.soon { color: #fde68a; }
 .foct-exam-bar .st { white-space: nowrap; opacity: .85; font-weight: 500; }
 .foct-exam-bar .st.warn { opacity: 1; color: #fde68a; }
 .foct-exam-bar button { font: inherit; font-weight: 700; color: #b91c1c; background: #fff; border: 0; border-radius: 999px; padding: 5px 12px; cursor: pointer; }
@@ -301,32 +552,55 @@
 .foct-exam-toast { left: 50%; bottom: 84px; transform: translate(-50%, 8px); padding: 10px 18px; font-size: 14px; pointer-events: none;
   background: rgba(30, 27, 60, .94); box-shadow: 0 8px 24px rgba(0, 0, 0, .3); opacity: 0; transition: opacity .2s, transform .2s; }
 .foct-exam-toast.show { opacity: 1; transform: translate(-50%, 0); }
-.foct-exam-signin { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; padding: 16px;
+.foct-exam-signin, .foct-exam-curtain { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; padding: 16px;
   background: rgba(20, 16, 40, .72); backdrop-filter: blur(3px); font: 15px/1.45 "Segoe UI", Roboto, Arial, sans-serif; }
-.foct-exam-signin form { width: min(440px, 100%); background: #fff; color: #1d1b33; border-radius: 16px; padding: 24px 24px 20px;
+.foct-exam-curtain { background: rgba(20, 16, 40, .9); }
+.foct-exam-signin form, .foct-exam-curtain .card { width: min(460px, 100%); background: #fff; color: #1d1b33; border-radius: 16px; padding: 24px 24px 20px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, .4); border-top: 6px solid #dc2626; }
-.foct-exam-signin .k { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: #dc2626; text-transform: uppercase; }
-.foct-exam-signin h2 { font-size: 20px; margin: 4px 0 6px; line-height: 1.25; }
-.foct-exam-signin p { margin: 0 0 14px; color: #55527a; font-size: 14px; }
+.foct-exam-signin .k, .foct-exam-curtain .k, .foct-exam-msg .k { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: #dc2626; text-transform: uppercase; }
+.foct-exam-signin h2, .foct-exam-curtain h2 { font-size: 20px; margin: 4px 0 6px; line-height: 1.25; }
+.foct-exam-signin p, .foct-exam-curtain p { margin: 0 0 14px; color: #55527a; font-size: 14px; }
 .foct-exam-signin label { display: block; font-weight: 600; font-size: 13px; margin: 12px 0 4px; }
 .foct-exam-signin input { width: 100%; box-sizing: border-box; font: inherit; padding: 9px 11px; border: 1px solid #c9c6e0; border-radius: 9px; color: #1d1b33; background: #fff; }
 .foct-exam-signin input:focus { outline: 2px solid #dc2626; outline-offset: 1px; }
-.foct-exam-signin button { margin-top: 18px; width: 100%; font: inherit; font-weight: 700; color: #fff; background: #dc2626; border: 0; border-radius: 10px; padding: 11px; cursor: pointer; }
+.foct-exam-signin button, .foct-exam-curtain button, .foct-exam-curtain a.btn { display: block; box-sizing: border-box; margin-top: 18px; width: 100%; font: inherit; font-weight: 700;
+  color: #fff; background: #dc2626; border: 0; border-radius: 10px; padding: 11px; cursor: pointer; text-align: center; text-decoration: none; }
+.foct-exam-curtain a.btn { background: #342e6c; }
 .foct-exam-signin button:disabled { opacity: .6; cursor: default; }
 .foct-exam-signin .err { color: #b91c1c; font-size: 13px; min-height: 18px; margin-top: 8px; }
+.foct-exam-msg { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 2147483647; width: min(560px, calc(100vw - 28px));
+  background: #fff; color: #1d1b33; border-radius: 14px; padding: 14px 16px; box-shadow: 0 16px 50px rgba(0, 0, 0, .35); border-left: 6px solid #dc2626;
+  font: 14px/1.45 "Segoe UI", Roboto, Arial, sans-serif; display: flex; gap: 14px; align-items: flex-start; }
+.foct-exam-msg.warn { border-left-color: #f59e0b; }
+.foct-exam-msg .txt { flex: 1; white-space: pre-wrap; }
+.foct-exam-msg button { font: inherit; font-weight: 700; color: #fff; background: #342e6c; border: 0; border-radius: 9px; padding: 7px 16px; cursor: pointer; }
+.foct-exam-off { opacity: .35 !important; filter: grayscale(1); pointer-events: none !important; }
 html.foct-exam .foct-bar { box-shadow: inset 0 0 0 9999px rgba(220, 38, 38, .10); }
 html.foct-exam .foct-toasts { bottom: 80px; }   /* the labs' own messages stay above the exam bar */
 html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f59e0b); }
-@media print { .foct-exam-toast, .foct-exam-bar button, .foct-exam-signin { display: none; } }`;
-  let styleEl, markEl, frameEl, badgeEl, barEl, toastEl, signEl, toastTimer, clockTimer, lastToast = "", lastToastAt = 0;
+@media print {
+  .foct-exam-toast, .foct-exam-bar button, .foct-exam-signin, .foct-exam-msg { display: none; }
+  html.foct-exam.foct-exam-noprint body { display: none !important; }
+  html.foct-exam.foct-exam-noprint::after { content: "Printing is turned off during the exam."; display: block; padding: 40px; font: 20px sans-serif; }
+}`;
+  let styleEl, markEl, frameEl, badgeEl, barEl, toastEl, signEl, curtainEl, toastTimer, clockTimer;
+  let lastToast = "", lastToastAt = 0;
   const make = (cls, tag = "div") => { const d = document.createElement(tag); d.className = cls; return d; };
   const mount = (el) => { if (!el.isConnected) document.documentElement.appendChild(el); };
+  const coverEl = () => (curtainEl && curtainEl.isConnected ? curtainEl : signEl && signEl.isConnected ? signEl : null);
   function addStyle() {
     if (!styleEl) { styleEl = document.createElement("style"); styleEl.textContent = CSS; }
     if (!styleEl.isConnected) (document.head || document.documentElement).appendChild(styleEl);
+    styleEl.__foctShown = true;
   }
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const hhmm = (t) => new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const pad = (n) => String(n).padStart(2, "0");
+  const clock = (ms) => {
+    const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
+  };
+  const timeLeft = () => (state.ends_at && !state.timeup ? state.ends_at * 1000 - serverNow() : null);
 
   function watermark() {
     const now = new Date();
@@ -350,11 +624,58 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
   }
   function markSent() { setStatus(`Work sent ${hhmm(Date.now())}`); }
 
+  // which blocking screen this page needs now, or null
+  function curtainFor() {
+    if (!isTop || !state.on) return null;
+    if (!labAllowed(PAGE_LAB)) {
+      return { kind: "notlab", title: "This lab is not part of the exam", home: true,
+               text: "Your teacher has chosen which labs can be used during this exam." };
+    }
+    if (state.timeup) {
+      return { kind: "timeup", title: "Time is up",
+               text: me ? "Your work has been sent to your teacher. You can stop now." : "The time for this exam is over." };
+    }
+    if (state.register && !me) return null;               // the sign-in card shows instead
+    const L = currentLock();
+    if (L) {
+      return { kind: "lock", title: "Exam paused on this PC",
+               text: `${L.reason}. ` + (L.auto ? "Close the developer tools and undo any changes. This screen unlocks by itself when everything is back to normal."
+                                               : "Your teacher will let you back in.")
+                     + (me ? " Your teacher has been notified. Work you did before this is safe." : "") };
+    }
+    if (fsNeeded() && !document.fullscreenElement) {
+      return { kind: "fullscreen", title: "The exam runs in full screen", button: "Continue in full screen",
+               text: "Leaving full screen is reported to your teacher." };
+    }
+    return null;
+  }
+  function renderCurtain() {
+    const c = curtainFor();
+    if (!c) { if (curtainEl) { curtainEl.remove(); curtainEl = null; } return; }
+    addStyle();
+    const sig = c.kind + "|" + c.text;
+    if (!curtainEl || curtainEl.dataset.sig !== sig) {
+      if (!curtainEl) { curtainEl = make("foct-exam-curtain"); curtainEl.setAttribute("role", "alertdialog"); curtainEl.setAttribute("aria-modal", "true"); }
+      curtainEl.dataset.sig = sig;
+      curtainEl.innerHTML = `<div class="card"><div class="k">Exam &middot; ${esc(state.title || "FoCT Virtual Labs")}</div>
+        <h2>${esc(c.title)}</h2><p>${esc(c.text)}</p>
+        ${c.button ? `<button type="button">${esc(c.button)}</button>` : ""}${c.home ? '<a class="btn" href="/">Back to the labs</a>' : ""}</div>`;
+      const b = curtainEl.querySelector("button");
+      if (b) b.onclick = () => { document.documentElement.requestFullscreen().catch(() => toast("Press F11 or allow full screen.")); };
+      setTimeout(() => { const f = curtainEl && curtainEl.querySelector("button, a"); if (f) f.focus(); }, 0);
+    }
+    const put = () => mount(curtainEl);
+    if (document.body) put(); else document.addEventListener("DOMContentLoaded", put, { once: true });
+  }
+
   function render() {
     document.documentElement.classList.toggle("foct-exam", active());
+    document.documentElement.classList.toggle("foct-exam-noprint", blockKeys());
     if (!isTop) return;
+    renderCurtain();
+    markPortal();
     if (!state.on) {
-      for (const el of [markEl, frameEl, badgeEl, barEl]) if (el) el.remove();
+      for (const el of [markEl, frameEl, badgeEl, barEl]) if (el) { el.remove(); el.__foctShown = false; }
       clearInterval(clockTimer);
       clockTimer = null;
       return;
@@ -365,12 +686,12 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
       for (const el of [markEl, frameEl, badgeEl]) el.setAttribute("aria-hidden", "true");
     }
     markEl.style.backgroundImage = watermark();
-    [markEl, frameEl].forEach(mount);
+    [markEl, frameEl].forEach((el) => { mount(el); el.__foctShown = true; });
     if (collecting()) {
       badgeEl.remove();
       if (!barEl) {
         barEl = make("foct-exam-bar");
-        barEl.innerHTML = '<span class="who"></span><span class="st"></span><button type="button">Submit files</button>';
+        barEl.innerHTML = '<span class="who"></span><span class="left"></span><span class="st"></span><button type="button">Submit files</button>';
         barEl.querySelector("button").onclick = submitFiles;
       }
       barEl.querySelector(".who").textContent = `EXAM · ${me.name} · ${me.enrolment}`;
@@ -379,17 +700,47 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
       mount(barEl);
     } else {
       if (barEl) barEl.remove();
-      badgeEl.textContent = "EXAM MODE · copy & paste off";
       mount(badgeEl);
     }
-    if (!clockTimer) clockTimer = setInterval(() => { if (state.on) markEl.style.backgroundImage = watermark(); }, 30000);
+    tickClock();
+    if (!clockTimer) clockTimer = setInterval(tickClock, 1000);
+  }
+
+  let warned = {};
+  function tickClock() {
+    if (!state.on) return;
+    const left = timeLeft();
+    const text = left == null ? "" : `${clock(left)} left`;
+    if (barEl && barEl.isConnected) {
+      const el = barEl.querySelector(".left");
+      el.textContent = text;
+      el.classList.toggle("soon", left != null && left < 10 * 60e3);
+    } else if (badgeEl) {
+      badgeEl.textContent = "EXAM MODE · copy & paste off" + (text ? ` · ${text}` : "");
+    }
+    if (left != null) {
+      for (const [mins, msg] of [[10, "10 minutes left. Save your work."], [1, "1 minute left."]]) {
+        const k = `${state.id}:${mins}`;
+        if (left <= mins * 60e3 && left > (mins * 60e3 - 60e3) && !warned[k]) { warned[k] = true; banner("warn", msg); }
+      }
+      if (left <= 0) poll();                             // the server confirms "time is up"
+    }
+    if (Date.now() % 30000 < 1000 && markEl) markEl.style.backgroundImage = watermark();
+  }
+
+  function markPortal() {                                // grey out the labs that are not part of the exam
+    if (location.pathname !== "/" && location.pathname !== "/index.html") return;
+    const grey = () => document.querySelectorAll("a[href^='/apps/']").forEach((a) => {
+      const u = new URL(a.getAttribute("href"), location.origin);
+      const off = active() && !labAllowed(labOf(u.pathname, u.search));
+      a.classList.toggle("foct-exam-off", off);
+      if (off) a.title = "Not part of this exam";
+    });
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", grey, { once: true }); else grey();
   }
 
   function toast(msg) {
-    if (!isTop) {
-      try { if (window.top.__foctExamToast) window.top.__foctExamToast(msg); } catch { /* other origin */ }
-      return;
-    }
+    if (!isTop) { const api = topApi(); if (api) api.toast(msg); return; }
     if (msg === lastToast && Date.now() - lastToastAt < 2000) return;
     lastToast = msg;
     lastToastAt = Date.now();
@@ -402,7 +753,28 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toastEl.classList.remove("show"), 3200);
   }
-  if (isTop) window.__foctExamToast = toast;
+
+  let bannerEl = null;
+  function banner(kind, text, onOk) {                    // a notice at the top with an OK button
+    if (!isTop) return;
+    addStyle();
+    if (bannerEl) bannerEl.remove();
+    bannerEl = make(`foct-exam-msg ${kind === "warn" ? "warn" : ""}`);
+    bannerEl.setAttribute("role", "alert");
+    bannerEl.innerHTML = `<div class="txt"><div class="k">${kind === "warn" ? "Exam" : "Message from your teacher"}</div>${esc(text)}</div><button type="button">OK</button>`;
+    const el = bannerEl;
+    el.querySelector("button").onclick = () => { el.remove(); if (bannerEl === el) bannerEl = null; if (onOk) onOk(); };
+    const put = () => mount(el);
+    if (document.body) put(); else document.addEventListener("DOMContentLoaded", put, { once: true });
+  }
+  function showMessage() {
+    const m = state.message;
+    if (!isTop || !state.on || !m || !m.text) return;
+    const k = `foct.exam.msg.${state.id}`;
+    if (ls.get(k) === m.id || (bannerEl && bannerEl.dataset.msg === m.id)) return;
+    banner("msg", m.text, () => ls.set(k, m.id));
+    bannerEl.dataset.msg = m.id;
+  }
 
   // ------------------------------------------------------------ sign in and hand in
   function signIn() {
@@ -419,20 +791,22 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
       <input id="foctExamName" name="name" autocomplete="off" maxlength="80" required>
       <label for="foctExamEnrol">Enrolment no.</label>
       <input id="foctExamEnrol" name="enrolment" autocomplete="off" maxlength="40" required>
+      ${state.code ? '<label for="foctExamCode">Exam code (on the board)</label><input id="foctExamCode" name="code" autocomplete="off" inputmode="numeric" maxlength="12" required>' : ""}
       <div class="err" role="alert"></div>
       <button type="submit">Start exam</button>
     </form>`;
     const form = signEl.querySelector("form"), err = signEl.querySelector(".err"), btn = signEl.querySelector("button");
     form.onsubmit = async (e) => {
       e.preventDefault();
-      const name = form.name.value.trim(), enrolment = form.enrolment.value.trim();
+      const name = form.name.value.trim(), enrolment = form.enrolment.value.trim(), code = form.code ? form.code.value.trim() : "";
       if (name.length < 2) { err.textContent = "Please enter your full name."; form.name.focus(); return; }
       if (enrolment.length < 2) { err.textContent = "Please enter your enrolment number."; form.enrolment.focus(); return; }
+      if (form.code && !code) { err.textContent = "Please enter the exam code."; form.code.focus(); return; }
       btn.disabled = true;
       err.textContent = "";
       try {
         const r = await fetch("/__exam/register", { method: "POST", headers: { "Content-Type": "application/json" },
-                                                     body: JSON.stringify({ exam: state.id, name, enrolment }) });
+                                                     body: JSON.stringify({ exam: state.id, name, enrolment, code }) });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error || "Could not sign in. Ask your teacher.");
         // What is already in this browser does not count as this exam's work.
@@ -441,10 +815,8 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
         ls.set(`foct.exam.base.${state.id}`, base);
         me = { token: j.token, name: j.name, enrolment: j.enrolment, folder: j.folder, saved: null };
         ls.set(meKey(), me);
-        closeSignIn();
-        render();
-        toast(`Welcome, ${j.name}. Your work is sent to your teacher automatically.`);
-        poll();
+        ss.set("foct.exam.welcome", j.name);
+        location.reload();          // the labs load now that the server knows this PC
       } catch (ex) {
         err.textContent = ex.message || "Could not sign in.";
         btn.disabled = false;
@@ -454,7 +826,7 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
     signEl.addEventListener("keydown", (e) => {
       e.stopPropagation();
       if (e.key !== "Tab") return;
-      const f = [form.name, form.enrolment, btn];
+      const f = Array.from(form.querySelectorAll("input, button"));
       const i = f.indexOf(document.activeElement);
       if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
       else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
@@ -468,6 +840,7 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
+    input.__foctSubmit = true;
     input.onchange = async () => {
       const files = Array.from(input.files || []);
       if (!files.length) return;
@@ -484,11 +857,17 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
 
   // other tabs on this PC signed in, or the identity was cleared
   window.addEventListener("storage", (e) => {
-    if (e.key && e.key.startsWith("foct.exam.me.")) { loadMe(); render(); if (me) closeSignIn(); }
+    if (e.key && e.key.startsWith("foct.exam.me.")) { loadMe(); if (me) location.reload(); else render(); }
   });
+
+  if (isTop) window.__foctExamApi = { capture, collecting, count: countBlocked, report, tamper, toast };
 
   // ------------------------------------------------------------ start
   render();
+  if (isTop) {
+    const welcome = ss.get("foct.exam.welcome");
+    if (welcome) { ss.del("foct.exam.welcome"); setTimeout(() => toast(`Welcome, ${welcome}. Your work is sent to your teacher automatically.`), 400); }
+  }
   if (isTop || !canReadTop) {
     poll();
     setInterval(poll, POLL_MS);
@@ -497,5 +876,11 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
       else if (collecting()) syncWork(0);      // the student is leaving this page: send what changed
     });
   }
-  if (isTop) setInterval(() => { if (collecting() && !document.hidden) syncWork(0); }, SYNC_MS);
+  if (isTop) {
+    setInterval(() => { if (collecting() && !document.hidden) syncWork(0); }, SYNC_MS);
+    setInterval(flushBlocked, 15000);
+    setInterval(checkScreens, 20000);
+    setTimeout(checkScreens, 3000);
+  }
+  setInterval(runChecks, CHECK_MS);
 })();

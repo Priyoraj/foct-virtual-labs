@@ -159,10 +159,71 @@ How it works:
 Only the server PC can switch exam mode, see the roster or download submissions, and other web
 sites cannot do it through the administrator's browser.
 
-Exam mode stops casual copying, but a student who knows the browser's developer tools could get
-around it. For strict exams, also turn off developer tools on the lab PCs with the Edge or
-Chrome policy `DeveloperToolsAvailability` = 2. USB drives or other programs are best blocked
-by the lab's usual exam setup.
+### Safeguards
+
+Choose them on the control page before you start. The tick-boxes are under **Safeguards**; most
+are on by default.
+
+**Enforced by the server itself.** Developer tools on a student PC cannot change these:
+
+* **Labs allowed in this exam.** Other labs show "This lab is not part of the exam", their files
+  are refused, and the home page greys them out.
+* **Sign-in gate.** With sign-in, the server gives the labs only to PCs that are signed in, not
+  locked, and checking in every few seconds. A PC whose exam script is blocked or switched off
+  gets no labs after about 45 seconds.
+* **Exam code.** Students must type a 4-digit code that the control page shows for the board.
+* **Only these PCs may sign in.** A list of addresses, ranges or subnets.
+* **Time limit.** A countdown shows in each student's bar, with warnings at 10 minutes and
+  1 minute. When it reaches zero, every PC sends its work and the labs lock. **+10 minutes**
+  reopens them.
+* **Your actions.** Lock or let back in a single student, and send a message to every screen.
+
+**In every exam page.** These are reported to you:
+
+* No opening files from the PC or a pen drive (Open buttons, Office's "Open a file", Jupyter
+  upload, file pickers), and no built-in example programs. *Submit files* still works.
+* No browser right-click menu, developer-tools keys (F12, Ctrl+Shift+I/J/C), view source (Ctrl+U)
+  or printing (Ctrl+P, and printouts come out blank).
+* Leaving the exam window (another program, browser tab or window) is noted with its length.
+  Moving between lab tabs is not counted. Optionally the student is warned, and the exam pauses
+  after N times until you let them back in.
+* Require full screen (optional): leaving it pauses the exam on that PC until the student
+  returns.
+* Text that appears 200+ characters at once in a code editor is noted. Paste is blocked, so
+  such text was injected or typed by a tool.
+* A second screen is noted, in secure (HTTPS) mode only; browsers offer this check only on
+  secure pages.
+
+**Tamper detection and lock.**
+
+* Every 3 seconds each page checks itself:
+  * Are developer tools open? A `debugger` statement pauses only while they are, and the pause
+    can be measured.
+  * Do the copy, paste and drop guards still block a test event?
+  * Are the clipboard, download and file-open guards still in place?
+  * Is the watermark still on screen?
+* If anything fails, the student's screen shows "Exam paused on this PC", the server stops giving
+  that PC the labs, and you see it on the control page.
+* The lock lifts by itself once everything is back to normal. If you choose "wait until I let
+  them back in", it lifts only when you press **Let back in**.
+
+Everything is recorded with times:
+
+* The control page shows the alerts per student.
+* The zip has `incidents.csv`, an alerts column in `roster.csv`, and the alerts in each
+  `_student.txt`.
+
+During an exam the browsers check every file with the server instead of using their 30-day copy,
+so these rules apply to every file. The checks are cheap 304 replies, not new downloads.
+
+**What this cannot do.** All the in-page checks run in the student's own browser:
+
+* A student who can rewrite the exam script itself could get around them, though not around the
+  server's part.
+* To close that gap, turn off developer tools on the lab PCs with the Edge or Chrome policy
+  `DeveloperToolsAvailability` = 2, through Group Policy or the lab image.
+* Other programs, USB drives, internet sites and phones are outside any web page's reach. Use the
+  lab's usual exam setup for those: firewall, browser policies and kiosk mode.
 
 ## Project layout
 

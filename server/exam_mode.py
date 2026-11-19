@@ -1,18 +1,23 @@
-"""FoCT Virtual Labs - exam mode: state, the students who signed in, and their submissions.
+"""FoCT Virtual Labs - exam mode: state, options, the students who signed in, their submissions,
+incidents and locks.
 
 While exam mode is on, every lab page blocks copy and paste and shows an exam watermark
-(web/assets/js/exam.js). With "students sign in" ticked, each student also enters their name and
-enrolment number, and the page sends their work here:
-  - their lab drafts (C, C++, Java, Python, Lex & Yacc, SQL, MongoDB, SPICE, NetSim, Jupyter)
-    whenever they change, at most once a minute, and at once when the teacher collects;
-  - every file they save or download from a lab during the exam;
-  - files they hand in with "Submit files".
-Files are kept in submissions/<exam title>/<Name>_<Enrolment>/ and the teacher downloads them as
-<exam title>.zip from the control page. Only the latest version of each file is kept.
+(web/assets/js/exam.js), and the teacher's options add more safeguards:
+  - only the labs chosen for the exam are served (enforced here, by the server);
+  - with "students sign in": each student enters name, enrolment no. (and the exam code, if set),
+    only allowed PCs may sign in, and the server serves the labs only to signed-in PCs that are not
+    locked and keep checking in; their work is collected into
+    submissions/<exam title>/<Name>_<Enrolment>/ and downloaded as <exam title>.zip;
+  - a time limit: when it runs out the work is collected and the labs lock;
+  - pages report incidents (leaving the exam, developer tools, removed protections, big insertions,
+    a second screen, blocked actions). Developer tools or removed protections lock the student at
+    once; the lock lifts when the page is back to normal, or when the teacher lets them back in;
+  - the teacher can lock or unlock a student and send a message to every screen.
 Only the Python standard library is used.
 """
 import csv
 import io
+import ipaddress
 import json
 import os
 import re
@@ -22,16 +27,47 @@ import threading
 import time
 import zipfile
 from pathlib import Path
+from urllib.parse import parse_qs
 
 UPLOAD_MAX = 50 * 1024 * 1024          # one file
 STUDENT_MAX = 300 * 1024 * 1024        # everything one student sends in one exam
 GRACE = 120                            # seconds after the exam ends during which late uploads still count
+STALE = 45                             # seconds without a check-in before a signed-in PC loses the labs
+EVENTS_KEPT = 300                      # per student; the counters keep counting
 BLOCKED_EXT = {".exe", ".com", ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe", ".jse", ".wsf", ".wsh", ".msi",
                ".msp", ".scr", ".pif", ".lnk", ".dll", ".cpl", ".hta", ".reg", ".sys", ".scf", ".url"}
 WIN_BAD = re.compile(r'[<>:"/\\|?*\x00-\x1f\x7f]')
 RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 NAME_RE = re.compile(r"[\w .'\-]{2,80}")
 ENROL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9/._ \-]{1,39}")
+
+LABS = {"c": "C", "cpp": "C++", "java": "Java", "python": "Python IDE", "jupyter": "Jupyter", "lex": "Lex & Yacc",
+        "cdtools": "Compiler tools", "sql": "SQL", "mongo": "MongoDB", "spice": "SPICE", "circuit": "Circuit simulator",
+        "netsim": "Network simulator", "drawio": "Diagrams", "office": "Office"}
+CODE_LABS = {"c", "cpp", "java", "python", "lex"}
+NEEDS = [   # URL prefix -> the labs that use it (first match wins)
+    ("/apps/code/", CODE_LABS), ("/apps/notebook/", {"jupyter"}), ("/apps/sql/", {"sql"}), ("/apps/mongo/", {"mongo"}),
+    ("/apps/cdtools/", {"cdtools"}), ("/apps/spice/", {"spice"}), ("/apps/circuit/", {"circuit"}),
+    ("/apps/netsim/", {"netsim"}), ("/apps/drawio/", {"drawio"}), ("/apps/office/", {"office"}),
+    ("/vendor/monaco/", CODE_LABS | {"sql", "mongo", "spice"}),
+    ("/runtimes/clang/", {"c", "cpp", "lex"}), ("/runtimes/lexyacc/", {"lex"}),
+    ("/runtimes/teavm/", {"java"}), ("/runtimes/javabox/", {"java"}),
+    ("/runtimes/pyodide/", {"python", "jupyter"}), ("/runtimes/pywheels/", {"python", "jupyter"}),
+    ("/runtimes/sql/", {"sql"}), ("/runtimes/mongo/", {"mongo"}), ("/runtimes/viz/", {"cdtools"}),
+    ("/runtimes/spice/", {"spice"}),
+]
+OPTS = {"block_open": True,      # opening files from the PC / pen drive, and the IDE's example programs
+        "block_keys": True,      # right-click menu, developer-tools and view-source keys, printing
+        "tamper_lock": True,     # lock on developer tools or removed protections
+        "unlock": "auto",        # "auto": when back to normal; "teacher": only when the teacher lets them back in
+        "leave": "log",          # leaving the exam window: "log", "warn" or "lock" (after leave_limit times)
+        "leave_limit": 3,
+        "fullscreen": False}     # the exam runs full screen
+EVENT_KINDS = {"left", "fullscreen", "devtools", "tamper", "bigins", "screen2", "blocked"}
+EVENT_NAMES = {"left": "Left the exam window", "fullscreen": "Left full screen", "devtools": "Developer tools opened",
+               "tamper": "Exam protection changed", "bigins": "Large insertion in an editor", "screen2": "Second screen",
+               "blocked": "Blocked", "stale": "Stopped checking in", "lock": "Locked", "unlock": "Unlocked",
+               "timeup": "Time up"}
 
 
 def safe_name(text, fallback="file", limit=100):
@@ -67,13 +103,59 @@ def clean_student(name, enrolment):
     return name, enrolment
 
 
+def parse_allow(text):
+    """'192.168.1.20-192.168.1.110, 10.0.5.0/24, 192.168.1.5' -> [(first, last), ...] as integers."""
+    ranges = []
+    for part in re.split(r"[,;\s]+", str(text or "").strip()):
+        if not part:
+            continue
+        if "/" in part:
+            net = ipaddress.ip_network(part, strict=False)
+            ranges.append((int(net.network_address), int(net.broadcast_address)))
+        elif "-" in part:
+            a, b = part.split("-", 1)
+            lo, hi = int(ipaddress.ip_address(a.strip())), int(ipaddress.ip_address(b.strip()))
+            ranges.append((min(lo, hi), max(lo, hi)))
+        else:
+            ip = int(ipaddress.ip_address(part))
+            ranges.append((ip, ip))
+    return ranges
+
+
+def ip_allowed(ip, ranges):
+    if not ranges:
+        return True
+    try:
+        n = int(ipaddress.ip_address(ip))
+    except ValueError:
+        return False
+    return any(lo <= n <= hi for lo, hi in ranges)
+
+
+def labs_for(path, query, page):
+    """The labs a request belongs to, or None for shared files (portal, help, assets)."""
+    if page and path.startswith("/apps/code/"):
+        lang = (parse_qs(query).get("lang") or ["c"])[0]
+        return {lang if lang in CODE_LABS else "c"}
+    for prefix, labs in NEEDS:
+        if path.startswith(prefix):
+            return labs
+    return None
+
+
+def duration(secs):
+    secs = int(secs or 0)
+    return f"{secs // 60}m {secs % 60:02d}s" if secs >= 60 else f"{secs}s"
+
+
 class ExamMode:
     def __init__(self, state_file, root):
         self.state_file = Path(state_file)
         self.root = Path(root)
         self.lock = threading.Condition()
         self.state = {"on": False, "title": "", "since": None, "ended": None, "id": None, "folder": None,
-                      "register": True, "collect": 0}
+                      "register": True, "collect": 0, "labs": None, "code": None, "allow": "", "ends_at": None,
+                      "timeup": False, "opts": dict(OPTS), "message": None}
         self.students = {}        # token -> record
         try:
             saved = json.loads(self.state_file.read_text(encoding="utf-8"))
@@ -81,14 +163,23 @@ class ExamMode:
                 if k in saved:
                     self.state[k] = saved[k]
             self.state["title"] = str(self.state["title"] or "")[:120]
+            self.state["opts"] = {**OPTS, **(self.state["opts"] or {})}
             if self.state["folder"]:
                 roster = json.loads((self.exam_dir() / ".exam.json").read_text(encoding="utf-8"))
                 if roster.get("id") == self.state["id"]:
                     self.students = roster.get("students", {})
         except (OSError, ValueError, AttributeError, TypeError):
             pass
+        self._ranges = self._safe_ranges(self.state["allow"])
 
     # ------------------------------------------------------------ helpers (call with the lock held)
+    @staticmethod
+    def _safe_ranges(text):
+        try:
+            return parse_allow(text)
+        except ValueError:
+            return []
+
     def exam_dir(self):
         return self.root / self.state["folder"]
 
@@ -123,26 +214,63 @@ class ExamMode:
         rec = self.students.get(token or "")
         return rec if rec and self._accepting() else None
 
-    # ------------------------------------------------------------ public
+    def _log(self, rec, kind, detail="", secs=0):
+        ev = rec.setdefault("events", [])
+        ev.append({"t": time.time(), "kind": kind, "detail": str(detail)[:200], "secs": round(secs or 0, 1)})
+        del ev[:-EVENTS_KEPT]
+
+    def _lock(self, rec, kind, reason, auto):
+        if rec.get("locked"):
+            return
+        rec["locked"] = {"kind": kind, "reason": reason, "at": time.time(), "auto": bool(auto)}
+        self._log(rec, "lock", reason)
+
+    def _tick(self):
+        s = self.state
+        if s["on"] and s["ends_at"] and not s["timeup"] and time.time() >= s["ends_at"]:
+            s["timeup"] = True
+            s["collect"] += 1                       # every PC sends its final work
+            for rec in self.students.values():
+                self._log(rec, "timeup", "the time limit ran out")
+            self._save()
+
+    # ------------------------------------------------------------ teacher
     def public(self):
         with self.lock:
+            self._tick()
             s = self.state
             return {"on": s["on"], "title": s["title"], "since": s["since"], "id": s["id"],
-                    "register": bool(s["register"]), "collect": s["collect"]}
+                    "register": bool(s["register"]), "collect": s["collect"], "labs": s["labs"],
+                    "code": bool(s["code"]), "ends_at": s["ends_at"], "timeup": bool(s["timeup"]),
+                    "opts": dict(s["opts"]), "message": s["message"]}
 
-    def set(self, on, title, register):
+    def configure(self, on, title, register=True, labs=None, code=False, allow="", minutes=0, opts=None):
+        if labs is not None:
+            labs = [x for x in labs if x in LABS] or None
+            if labs and set(labs) == set(LABS):
+                labs = None
+        ranges = parse_allow(allow)                 # raises ValueError for a typing mistake
+        o = {**OPTS, **{k: v for k, v in (opts or {}).items() if k in OPTS}}
+        o["unlock"] = "teacher" if o["unlock"] == "teacher" else "auto"
+        o["leave"] = o["leave"] if o["leave"] in ("log", "warn", "lock") else "log"
+        o["leave_limit"] = max(1, min(20, int(o["leave_limit"] or 3)))
+        for k in ("block_open", "block_keys", "tamper_lock", "fullscreen"):
+            o[k] = bool(o[k])
         with self.lock:
             s = self.state
             title = str(title or "").strip()[:120]
             if on and not s["on"]:                      # a new exam
-                s.update(on=True, since=time.time(), ended=None, title=title, register=bool(register), collect=0,
-                         id=time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2))
+                now = time.time()
+                s.update(on=True, since=now, ended=None, title=title, register=bool(register), collect=0,
+                         id=time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2), timeup=False, message=None,
+                         ends_at=now + int(minutes) * 60 if int(minutes or 0) > 0 else None)
                 self.students = {}
                 s["folder"] = self._new_folder(title) if s["register"] else None
-            elif on:                                   # change the title or the sign-in option
-                if s["register"] != bool(register) and register and not s["folder"]:
+                s["code"] = f"{secrets.randbelow(9000) + 1000}" if code else None
+            elif on:                                   # changes during the exam
+                if register and not s["register"] and not s["folder"]:
                     s["folder"] = self._new_folder(title or s["title"])
-                s["register"] = bool(register)
+                s["register"] = bool(register) or s["register"]
                 if title != s["title"] and s["folder"] and not self.students:
                     new = self._new_folder(title)
                     try:
@@ -152,17 +280,81 @@ class ExamMode:
                     except OSError:
                         pass
                 s["title"] = title
+                if code and not s["code"]:
+                    s["code"] = f"{secrets.randbelow(9000) + 1000}"
+                elif not code:
+                    s["code"] = None
             elif s["on"]:                              # end the exam; its submissions stay available
                 s.update(on=False, ended=time.time())
+            if on:
+                s["labs"], s["allow"], s["opts"] = labs, str(allow or "").strip()[:500], o
+                self._ranges = ranges
             self._save()
             return dict(s)
 
-    def register(self, exam_id, name, enrolment, ip):
+    def add_time(self, minutes):
+        with self.lock:
+            s = self.state
+            if not s["on"]:
+                return dict(s)
+            now = time.time()
+            base = max(s["ends_at"] or now, now) if s["timeup"] else (s["ends_at"] or now)
+            s["ends_at"] = base + int(minutes) * 60
+            if s["timeup"] and s["ends_at"] > now:
+                s["timeup"] = False
+            self._save()
+            return dict(s)
+
+    def send_message(self, text):
+        text = str(text or "").strip()[:500]
+        with self.lock:
+            self.state["message"] = {"id": secrets.token_hex(4), "text": text, "at": time.time()} if text else None
+            self._save()
+            return self.state["message"]
+
+    def teacher_lock(self, folder, lock):
+        with self.lock:
+            for rec in self.students.values():
+                if rec["folder"] == folder:
+                    if lock:
+                        self._lock(rec, "teacher", "Paused by your teacher", auto=False)
+                    elif rec.get("locked"):
+                        rec["locked"] = None
+                        rec["left_mark"] = rec.get("counts", {}).get("left", 0)
+                        self._log(rec, "unlock", "let back in by the teacher")
+                    self._save()
+                    return True
+            return False
+
+    def collect(self, timeout=25):
+        """Ask every page to send its latest work now; wait until the active PCs have answered."""
+        with self.lock:
+            if not self.state["id"]:
+                return {"asked": 0, "answered": 0}
+            self.state["collect"] += 1
+            n = self.state["collect"]
+            self._save()
+            if not self.state["on"]:
+                return {"asked": 0, "answered": 0}
+            active = [r for r in self.students.values() if time.time() - r["seen"] < 60]
+            end = time.time() + timeout
+            while time.time() < end and any(r.get("done", 0) < n for r in active):
+                self.lock.wait(min(1.0, end - time.time()))
+            return {"asked": len(active), "answered": sum(1 for r in active if r.get("done", 0) >= n)}
+
+    # ------------------------------------------------------------ students
+    def register(self, exam_id, name, enrolment, code, ip):
         name, enrolment = clean_student(name, enrolment)
         with self.lock:
             s = self.state
             if not (s["on"] and s["register"] and s["folder"] and exam_id == s["id"]):
                 raise PermissionError("This exam is not accepting sign-ins.")
+            if s["timeup"]:
+                raise PermissionError("The time for this exam is over.")
+            if not ip_allowed(ip, self._ranges):
+                raise PermissionError("This PC is not one of the exam PCs. Ask your teacher.")
+            if s["code"] and str(code or "").strip() != s["code"]:
+                raise ValueError("The exam code is not right. Look at the board, or ask your teacher.")
             key = re.sub(r"[\s/._-]", "", enrolment)
             same = [(t, r) for t, r in self.students.items() if re.sub(r"[\s/._-]", "", r["enrolment"]) == key]
             for t, r in same:
@@ -178,7 +370,7 @@ class ExamMode:
             token = secrets.token_urlsafe(18)
             now = time.time()
             rec = {"name": name, "enrolment": enrolment, "folder": folder, "ip": ip, "first": now, "seen": now,
-                   "saved": None, "files": {}, "done": 0}
+                   "saved": None, "files": {}, "done": 0, "locked": None, "events": [], "counts": {}}
             self.students[token] = rec
             (self.exam_dir() / folder).mkdir(parents=True, exist_ok=True)
             self._save()
@@ -187,12 +379,90 @@ class ExamMode:
     def seen(self, token, ip):
         with self.lock:
             rec = self.students.get(token or "")
-            if rec:
-                rec["seen"] = time.time()
-                rec["ip_now"] = ip
-                return {"name": rec["name"], "enrolment": rec["enrolment"], "folder": rec["folder"],
-                        "saved": rec["saved"]}
+            if not rec:
+                return None
+            rec["seen"] = time.time()
+            rec["ip_now"] = ip
+            rec.pop("stale_logged", None)
+            return {"name": rec["name"], "enrolment": rec["enrolment"], "folder": rec["folder"],
+                    "saved": rec["saved"], "locked": rec.get("locked")}
+
+    def event(self, token, kind, detail="", count=1, secs=0):
+        """A page reports an incident. Returns {"locked": lock or None, "new": locked just now, "who": ...}."""
+        with self.lock:
+            rec = self.students.get(token or "")
+            if not rec or not self.state["on"]:
+                return {"locked": None, "new": False, "who": ""}
+            before = rec.get("locked")
+            kind = kind if kind in EVENT_KINDS else "blocked"
+            counts = rec.setdefault("counts", {})
+            secs = max(0.0, min(float(secs or 0), 6 * 3600))
+            if kind == "blocked":
+                what = re.sub(r"[^a-z0-9]", "", str(detail).lower())[:20] or "action"
+                n = max(1, min(int(count or 1), 1000))
+                counts["blocked_" + what] = counts.get("blocked_" + what, 0) + n
+                self._log(rec, kind, f"{what} x{n}")
+            else:
+                counts[kind] = counts.get(kind, 0) + 1
+                if kind == "left":
+                    counts["left_s"] = counts.get("left_s", 0) + secs
+                self._log(rec, kind, detail, secs)
+            o = self.state["opts"]
+            if kind in ("devtools", "tamper") and o["tamper_lock"]:
+                self._lock(rec, kind, EVENT_NAMES[kind] + (f" ({detail})" if detail else ""), auto=o["unlock"] == "auto")
+            if kind == "left" and o["leave"] == "lock" and counts["left"] - rec.get("left_mark", 0) >= o["leave_limit"]:
+                self._lock(rec, "left", f"Left the exam window {counts['left']} times", auto=False)
+            rec["seen"] = time.time()
+            self._save()
+            after = rec.get("locked")
+            return {"locked": after, "new": bool(after and not before), "who": f"{rec['name']} ({rec['enrolment']})"}
+
+    def ok(self, token):
+        """The page is back to normal (developer tools closed, protections in place)."""
+        with self.lock:
+            rec = self.students.get(token or "")
+            if rec and rec.get("locked") and rec["locked"].get("auto"):
+                rec["locked"] = None
+                self._log(rec, "unlock", "back to normal")
+                self._save()
+            return rec.get("locked") if rec else None
+
+    def gate(self, token, path, query, page):
+        """None when the request may be served, else (status, message) - the server's own safeguards."""
+        labs = labs_for(path, query, page)
+        if labs is None:
             return None
+        with self.lock:
+            self._tick()
+            s = self.state
+            if not s["on"]:
+                return None
+            if s["labs"] is not None and not labs & set(s["labs"]):
+                return 403, "This lab is not part of the exam."
+            if page:                                # pages always load, so they can show sign-in or the lock screen
+                return None
+            if s["timeup"]:
+                return 403, "The time for the exam is over."
+            if not s["register"]:
+                return None
+            rec = self.students.get(token or "")
+            if not rec:
+                return 403, "Sign in to the exam first."
+            if rec.get("locked"):
+                return 403, "The exam is paused on this PC."
+            if time.time() - rec["seen"] > STALE:
+                if not rec.get("stale_logged"):
+                    rec["stale_logged"] = True
+                    rec.setdefault("counts", {})["stale"] = rec.get("counts", {}).get("stale", 0) + 1
+                    self._log(rec, "stale", "used the labs without checking in (exam script stopped?)")
+                    self._save()
+                return 403, "This PC stopped checking in with the exam."
+            return None
+
+    def cache_key(self):
+        """Part of the runtime cookie: during an exam it changes, so browsers check every file with the server."""
+        with self.lock:
+            return self.state["id"] if self.state["on"] else ""
 
     def upload(self, token, relpath, length, stream):
         """Write one file from the request body. Raises PermissionError / ValueError with a message."""
@@ -240,24 +510,25 @@ class ExamMode:
                 rec["seen"] = time.time()
                 self.lock.notify_all()
 
-    def collect(self, timeout=25):
-        """Ask every page to send its latest work now; wait until the active PCs have answered."""
-        with self.lock:
-            if not self.state["id"]:
-                return {"asked": 0, "answered": 0}
-            self.state["collect"] += 1
-            n = self.state["collect"]
-            self._save()
-            if not self.state["on"]:
-                return {"asked": 0, "answered": 0}
-            active = [r for r in self.students.values() if time.time() - r["seen"] < 60]
-            end = time.time() + timeout
-            while time.time() < end and any(r.get("done", 0) < n for r in active):
-                self.lock.wait(min(1.0, end - time.time()))
-            return {"asked": len(active), "answered": sum(1 for r in active if r.get("done", 0) >= n)}
+    # ------------------------------------------------------------ reports
+    @staticmethod
+    def alerts(rec):
+        c = rec.get("counts", {})
+        out = []
+        for kind, label in (("devtools", "Developer tools"), ("tamper", "Protection changed"), ("stale", "Stopped checking in"),
+                            ("screen2", "Second screen"), ("bigins", "Large insertion"), ("fullscreen", "Left full screen")):
+            if c.get(kind):
+                out.append(f"{label} x{c[kind]}")
+        if c.get("left"):
+            out.append(f"Left the window x{c['left']} ({duration(c.get('left_s', 0))})")
+        blocked = sum(v for k, v in c.items() if k.startswith("blocked_"))
+        if blocked:
+            out.append(f"Blocked actions x{blocked}")
+        return out
 
     def roster(self):
         with self.lock:
+            self._tick()
             now = time.time()
             counts = {}
             for r in self.students.values():
@@ -270,34 +541,49 @@ class ExamMode:
                              "saved": r["saved"], "files": len(r["files"]),
                              "kb": round(sum(r["files"].values()) / 1024),
                              "online": now - r["seen"] < 30,
-                             "twice": counts[re.sub(r"[\s/._-]", "", r["enrolment"])] > 1})
+                             "twice": counts[re.sub(r"[\s/._-]", "", r["enrolment"])] > 1,
+                             "locked": r.get("locked"), "alerts": self.alerts(r),
+                             "events": [dict(e, name=EVENT_NAMES.get(e["kind"], e["kind"])) for e in r.get("events", [])[-12:]]})
             folder = str(self.exam_dir().resolve()) if self.state["folder"] else None
-            return {"exam": dict(self.state), "folder": folder, "students": rows}
+            return {"exam": dict(self.state), "folder": folder, "students": rows, "labs": LABS, "now": now}
 
     def zip_file(self):
-        """The exam folder as a zip in a temporary file: <title>/<Name>_<Enrolment>/... and roster.csv."""
-        info = self.roster()
-        s = info["exam"]
+        """The exam folder as a zip in a temporary file: <title>/<Name>_<Enrolment>/..., roster.csv, incidents.csv."""
+        with self.lock:
+            s = dict(self.state)
+            students = [dict(r) for r in self.students.values()]
         if not s["folder"]:
             raise FileNotFoundError("There is no exam with submissions yet.")
+        info = self.roster()
         top = safe_name(s["title"] or s["folder"], fallback="Exam")
-        out = tempfile.TemporaryFile()
         stamp = lambda t: time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t)) if t else ""  # noqa: E731
+        out = tempfile.TemporaryFile()
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
             buf = io.StringIO()
             w = csv.writer(buf)
-            w.writerow(["Name", "Enrolment no.", "Folder", "PC", "Signed in", "Last saved", "Files", "Size (KB)", "Note"])
+            w.writerow(["Name", "Enrolment no.", "Folder", "PC", "Signed in", "Last saved", "Files", "Size (KB)",
+                        "Locked", "Alerts", "Note"])
             for r in info["students"]:
                 w.writerow([r["name"], r["enrolment"], r["folder"], r["pc"], stamp(r["first"]), stamp(r["saved"]),
-                            r["files"], r["kb"], "signed in on more than one PC" if r["twice"] else ""])
+                            r["files"], r["kb"], (r["locked"] or {}).get("reason", ""), "; ".join(r["alerts"]),
+                            "signed in on more than one PC" if r["twice"] else ""])
             z.writestr(f"{top}/roster.csv", "﻿" + buf.getvalue())   # BOM: Excel opens it as UTF-8
+            buf = io.StringIO()
+            w = csv.writer(buf)
+            w.writerow(["Name", "Enrolment no.", "Time", "Event", "Detail", "Seconds"])
+            for r in sorted(students, key=lambda r: r["enrolment"]):
+                for e in r.get("events", []):
+                    w.writerow([r["name"], r["enrolment"], stamp(e["t"]), EVENT_NAMES.get(e["kind"], e["kind"]),
+                                e.get("detail", ""), e.get("secs") or ""])
+            z.writestr(f"{top}/incidents.csv", "﻿" + buf.getvalue())
             base = self.root / s["folder"]
             for r in info["students"]:
                 folder = base / r["folder"]
+                alerts = "\r\n".join("  " + a for a in r["alerts"]) or "  none"
                 z.writestr(f"{top}/{r['folder']}/_student.txt",
                            f"Name: {r['name']}\r\nEnrolment no.: {r['enrolment']}\r\nPC: {r['pc']}\r\n"
                            f"Signed in: {stamp(r['first'])}\r\nLast saved: {stamp(r['saved'])}\r\n"
-                           f"Exam: {s['title']}\r\n")
+                           f"Exam: {s['title']}\r\nAlerts:\r\n{alerts}\r\n")
                 if not folder.is_dir():
                     continue
                 for f in sorted(folder.rglob("*")):

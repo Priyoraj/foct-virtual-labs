@@ -9,41 +9,59 @@
   :root { color-scheme: light dark; --navy: #342e6c; --red: #dc2626; --bg: #f5f4fb; --card: #fff; --line: #e3e1f2; --text: #1d1b33; --muted: #6b6890; --ok: #15803d; --warn: #b45309; }
   @media (prefers-color-scheme: dark) { :root { --bg: #15142a; --card: #1f1d3a; --line: #34325c; --text: #ecebf8; --muted: #a9a6cf; --ok: #4ade80; --warn: #fbbf24; } }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 16px/1.5 "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
-  main { max-width: 980px; margin: 32px auto; padding: 0 16px; }
-  header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  body { margin: 0; font: 15px/1.5 "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  main { max-width: 1040px; margin: 28px auto; padding: 0 16px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
   header img { width: 46px; height: 46px; border-radius: 50%; background: #fff; padding: 2px; }
   header h1 { font-size: 1.4rem; margin: 0; }
   header small { display: block; color: var(--muted); font-size: .85rem; font-weight: 500; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; box-shadow: 0 6px 24px rgba(30, 20, 90, .08); margin-bottom: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; box-shadow: 0 6px 24px rgba(30, 20, 90, .08); margin-bottom: 16px; }
   .card.on { border-color: var(--red); box-shadow: 0 0 0 3px rgba(220, 38, 38, .18); }
+  .top { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .top .grow { flex: 1; min-width: 260px; }
   .state { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; font-weight: 700; }
   .dot { width: 14px; height: 14px; border-radius: 50%; background: #9ca3af; flex: none; }
   .on .dot { background: var(--red); box-shadow: 0 0 0 5px rgba(220, 38, 38, .2); }
-  .muted { color: var(--muted); font-size: .93rem; }
-  label.f { display: block; font-weight: 600; margin: 16px 0 6px; }
-  input[type=text] { width: 100%; padding: 10px 12px; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
-  .check { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-size: .95rem; }
-  .check input { margin-top: 4px; width: 17px; height: 17px; accent-color: var(--red); }
-  .row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
-  button { font: inherit; font-weight: 700; padding: 10px 18px; border-radius: 10px; border: 0; cursor: pointer; color: #fff; }
+  .big { text-align: center; padding: 8px 18px; border-radius: 12px; border: 2px solid var(--line); }
+  .big b { display: block; font: 800 2rem/1.1 "Segoe UI", Roboto, Arial, sans-serif; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+  .big span { font-size: .8rem; color: var(--muted); font-weight: 600; }
+  .big.soon b { color: var(--red); }
+  .muted { color: var(--muted); font-size: .92rem; }
+  h2 { font-size: 1.05rem; margin: 0 0 6px; }
+  h3 { font-size: .95rem; margin: 18px 0 6px; }
+  label.f { display: block; font-weight: 600; margin: 14px 0 6px; }
+  input[type=text], input[type=number], textarea, select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px; }
+  input[type=text], textarea { width: 100%; }
+  input[type=number] { width: 90px; }
+  textarea { min-height: 60px; resize: vertical; }
+  .check { display: flex; gap: 9px; align-items: flex-start; margin: 8px 0; }
+  .check input { margin-top: 4px; width: 16px; height: 16px; accent-color: var(--red); flex: none; }
+  .labs { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 4px 14px; }
+  .labs .check { margin: 3px 0; }
+  .row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+  .links button { background: none; color: var(--muted); font-weight: 600; padding: 0 6px; text-decoration: underline; }
+  button { font: inherit; font-weight: 700; padding: 9px 16px; border-radius: 10px; border: 0; cursor: pointer; color: #fff; }
   button:disabled { opacity: .45; cursor: default; }
   .start { background: var(--red); }
-  .stop { background: var(--navy); }
+  .stop, .send { background: var(--navy); }
   .dl { background: #0f766e; }
-  h2 { font-size: 1.1rem; margin: 0 0 4px; }
-  table { width: 100%; border-collapse: collapse; font-size: .92rem; margin-top: 12px; }
+  .plain { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .sm { padding: 4px 10px; font-size: .82rem; border-radius: 8px; }
+  details { margin-top: 6px; }
+  summary { cursor: pointer; font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; margin-top: 12px; }
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+  th { color: var(--muted); font-weight: 600; font-size: .82rem; }
   td.n { color: var(--muted); }
-  .pill { display: inline-block; font-size: .78rem; font-weight: 700; padding: 1px 8px; border-radius: 99px; }
-  .pill.ok { color: var(--ok); border: 1px solid currentColor; }
-  .pill.off { color: var(--muted); border: 1px solid currentColor; }
-  .pill.warn { color: var(--warn); border: 1px solid currentColor; }
+  tr.locked td { background: rgba(220, 38, 38, .07); }
+  .pill { display: inline-block; font-size: .76rem; font-weight: 700; padding: 1px 8px; border-radius: 99px; border: 1px solid currentColor; margin: 1px 2px 1px 0; white-space: nowrap; }
+  .pill.ok { color: var(--ok); } .pill.off { color: var(--muted); } .pill.warn { color: var(--warn); } .pill.bad { color: var(--red); }
+  .alerts { color: var(--warn); font-size: .84rem; }
+  .ev { font-size: .82rem; color: var(--muted); margin-top: 4px; }
   .scroll { overflow-x: auto; }
   code { font-size: .88em; word-break: break-all; }
   ul { padding-left: 1.2em; margin: 6px 0 0; }
-  li { margin: 4px 0; }
+  li { margin: 3px 0; }
   #msg { font-weight: 600; }
 </style>
 </head>
@@ -55,17 +73,58 @@
   </header>
 
   <div class="card" id="card">
-    <div class="state"><span class="dot"></span><span id="stateText">Checking&hellip;</span></div>
-    <p class="muted" id="since"></p>
+    <div class="top">
+      <div class="grow">
+        <div class="state"><span class="dot"></span><span id="stateText">Checking&hellip;</span></div>
+        <p class="muted" id="since"></p>
+      </div>
+      <div class="big" id="codeBox" hidden><span>Exam code &middot; show it on the board</span><b id="code"></b></div>
+      <div class="big" id="timeBox" hidden><span>Time left</span><b id="left"></b></div>
+    </div>
+
     <label class="f" for="title">Exam title (used for the watermark and the submissions folder)</label>
     <input type="text" id="title" maxlength="120" placeholder="e.g. Programming in C, practical exam, CSE 3rd semester">
+
     <label class="check"><input type="checkbox" id="register" checked>
       <span>Students sign in with their <b>name and enrolment no.</b>, and their work is sent to this PC
       <span class="muted">(lab work every minute, every file they save or download, and files they hand in with &ldquo;Submit files&rdquo;)</span></span></label>
+    <label class="check"><input type="checkbox" id="codeOn">
+      <span>Students also type an <b>exam code</b> that you show on the board <span class="muted">(stops anyone outside the room from signing in)</span></span></label>
+    <div class="row" id="minutesRow"><label for="minutes"><b>Time limit</b></label>
+      <input type="number" id="minutes" min="0" max="600" value="0"> <span class="muted">minutes (0 = no limit). When it runs out, the work is collected and the labs lock.</span></div>
+
+    <h3>Labs allowed in this exam <span class="links"><button type="button" id="allLabs">all</button><button type="button" id="noLabs">none</button></span></h3>
+    <div class="labs" id="labs"></div>
+
+    <details id="more">
+      <summary>Safeguards</summary>
+      <label class="check"><input type="checkbox" id="block_open" checked><span><b>No opening files</b> from the PC or a pen drive, and no built-in example programs <span class="muted">(Submit files still works)</span></span></label>
+      <label class="check"><input type="checkbox" id="block_keys" checked><span><b>No right-click menu, developer-tools keys</b> (F12, Ctrl+Shift+I/J/C), <b>view source</b> (Ctrl+U) or <b>printing</b></span></label>
+      <label class="check"><input type="checkbox" id="tamper_lock" checked><span><b>Lock a student who opens the developer tools or removes the exam protections</b>
+        <span class="muted">(you see it here; the server also stops giving that PC the labs)</span></span></label>
+      <div class="row" style="margin: 0 0 6px 26px">
+        <label><input type="radio" name="unlock" value="auto" checked> unlock by itself when everything is back to normal</label>
+        <label><input type="radio" name="unlock" value="teacher"> wait until I let them back in</label>
+      </div>
+      <div class="row"><label for="leave"><b>Leaving the exam window</b> (another program, tab or window):</label>
+        <select id="leave"><option value="log">only note it here</option><option value="warn">warn the student</option><option value="lock">warn, and lock after</option></select>
+        <input type="number" id="leave_limit" min="1" max="20" value="3"> <span class="muted">times</span></div>
+      <label class="check"><input type="checkbox" id="fullscreen"><span><b>Require full screen</b> <span class="muted">(leaving it pauses the exam on that PC until the student returns)</span></span></label>
+      <label class="f" for="allow">Only these PCs may sign in <span class="muted">(optional, e.g. 192.168.1.20-192.168.1.110, 10.0.5.0/24)</span></label>
+      <input type="text" id="allow" placeholder="any PC on the lab network">
+    </details>
+
     <div class="row">
       <button class="start" id="start">Start exam mode</button>
+      <button class="plain" id="addTime" hidden>+10 minutes</button>
       <button class="stop" id="stop">Collect work and end exam</button>
     </div>
+  </div>
+
+  <div class="card" id="msgCard" hidden>
+    <h2>Message to every screen</h2>
+    <textarea id="message" maxlength="500" placeholder="e.g. Question 3: use n = 10. Everyone has 10 more minutes."></textarea>
+    <div class="row"><button class="send" id="sendMsg">Send</button><button class="plain" id="clearMsg">Remove message</button><span class="muted" id="msgState"></span></div>
   </div>
 
   <div class="card" id="subs" hidden>
@@ -77,8 +136,8 @@
     </div>
     <div class="scroll">
       <table>
-        <thead><tr><th>#</th><th>Name</th><th>Enrolment no.</th><th>PC</th><th>Signed in</th><th>Work received</th><th>Files</th><th></th></tr></thead>
-        <tbody id="rows"><tr><td colspan="8" class="muted">No student has signed in yet.</td></tr></tbody>
+        <thead><tr><th>#</th><th>Name</th><th>Enrolment no.</th><th>PC</th><th>Signed in</th><th>Work received</th><th>Files</th><th>Alerts</th><th>Status</th><th></th></tr></thead>
+        <tbody id="rows"><tr><td colspan="10" class="muted">No student has signed in yet.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -86,49 +145,122 @@
   <div class="card">
     <h2>What exam mode does</h2>
     <ul class="muted">
-      <li>On every lab page, copy, cut and paste stop working: keyboard shortcuts, right-click menus and editor menus. Dragging text or files into a page is blocked too.</li>
-      <li>A red frame and a watermark with the exam title, the student, the PC&rsquo;s network address and the time cover every page, including screenshots and printouts.</li>
-      <li>With sign-in, each student types their name and enrolment no. once. Their lab work then reaches this PC by itself: lab drafts changed during the exam, every file they save or download, and files they hand in with <b>Submit files</b>.</li>
-      <li><b>Download submissions</b> first asks every PC for its latest work (a few seconds). It then saves <i>Exam title</i>.zip to this PC&rsquo;s Downloads folder, with one folder per student named <i>Name_Enrolment</i> and a roster.csv.</li>
-      <li>Open pages switch within about 10 seconds. Exam mode stays on if the server restarts.</li>
-      <li>It stops casual copying. A student who knows the browser&rsquo;s developer tools could still get around it, so for strict exams also turn off developer tools on the lab PCs with a browser policy (Edge and Chrome: <i>DeveloperToolsAvailability</i> = 2).</li>
+      <li><b>Every exam page:</b> copy, cut and paste stop working (keys, menus, editor menus), dragging text or files in is blocked, and a red frame and watermark (exam title, student, PC address, time) cover the page, screenshots and printouts.</li>
+      <li><b>The server itself</b> serves only the labs you allow. With sign-in it serves them only to PCs that are signed in, not locked, and checking in every few seconds; a PC whose exam script is switched off gets no labs. Sign-in can need the exam code and one of the listed PCs. When the time limit runs out, the work is collected and the labs lock.</li>
+      <li><b>Safeguards in each page</b> (above) block opening files, example programs, developer-tools keys, right-click and printing, and notice leaving the window, leaving full screen, text that appears 200+ characters at once in an editor, and a second screen (secure mode only). Each page also checks itself: developer tools open, or a protection removed, locks that PC.</li>
+      <li><b>Alerts</b> appear in the table below, and <b>Download submissions</b> puts them in the zip: roster.csv, incidents.csv and each student&rsquo;s _student.txt.</li>
+      <li>This stops casual cheating. A student who knows how to rewrite the exam script itself could still get around the checks inside the browser, but not the server&rsquo;s part. To make it airtight, also turn off developer tools on the lab PCs with the Edge/Chrome policy <i>DeveloperToolsAvailability</i> = 2.</li>
     </ul>
   </div>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
 const ADMIN = { "Content-Type": "application/json", "X-FoCT-Admin": "1" };
-let typed = false, exam = null, busy = false;
-$("title").addEventListener("input", () => { typed = true; });
+let exam = null, busy = false, dirty = false, info = null, open = new Set();
 const time = (t) => t ? new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = (n) => String(n).padStart(2, "0");
+const clock = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`; };
+let skew = 0;
 
-function show(info) {
-  const e = info.exam;
+document.querySelectorAll("#card input, #card select").forEach((el) => el.addEventListener("input", () => { dirty = true; }));
+
+function buildLabs(labs) {
+  if ($("labs").childElementCount) return;
+  $("labs").innerHTML = Object.entries(labs).map(([id, name]) =>
+    `<label class="check"><input type="checkbox" value="${id}" checked><span>${esc(name)}</span></label>`).join("");
+  $("labs").querySelectorAll("input").forEach((el) => el.addEventListener("input", () => { dirty = true; }));
+}
+$("allLabs").onclick = () => { $("labs").querySelectorAll("input").forEach((el) => { el.checked = true; }); dirty = true; };
+$("noLabs").onclick = () => { $("labs").querySelectorAll("input").forEach((el) => { el.checked = false; }); dirty = true; };
+
+function readForm() {
+  const labs = [...$("labs").querySelectorAll("input:checked")].map((el) => el.value);
+  return {
+    title: $("title").value.trim(), register: $("register").checked, code: $("codeOn").checked,
+    minutes: +$("minutes").value || 0, labs, allow: $("allow").value.trim(),
+    opts: { block_open: $("block_open").checked, block_keys: $("block_keys").checked, tamper_lock: $("tamper_lock").checked,
+            unlock: document.querySelector("input[name=unlock]:checked").value, leave: $("leave").value,
+            leave_limit: +$("leave_limit").value || 3, fullscreen: $("fullscreen").checked },
+  };
+}
+function fillForm(e) {
+  $("title").value = e.title || "";
+  $("register").checked = !!e.register;
+  $("codeOn").checked = !!e.code;
+  $("allow").value = e.allow || "";
+  const labs = e.labs;
+  $("labs").querySelectorAll("input").forEach((el) => { el.checked = !labs || labs.includes(el.value); });
+  const o = e.opts || {};
+  for (const k of ["block_open", "block_keys", "tamper_lock", "fullscreen"]) $(k).checked = !!o[k];
+  document.querySelector(`input[name=unlock][value=${o.unlock === "teacher" ? "teacher" : "auto"}]`).checked = true;
+  $("leave").value = o.leave || "log";
+  $("leave_limit").value = o.leave_limit || 3;
+}
+
+function show(data) {
+  info = data;
+  const e = data.exam;
   exam = e;
+  skew = data.now * 1000 - Date.now();
+  buildLabs(data.labs);
   $("card").classList.toggle("on", !!e.on);
-  $("stateText").textContent = e.on ? "Exam mode is ON" : "Exam mode is off";
+  $("stateText").textContent = e.on ? (e.timeup ? "Exam mode is ON · time is up" : "Exam mode is ON") : "Exam mode is off";
   $("since").textContent = e.on ? `Started at ${time(e.since)}${e.title ? " · " + e.title : ""}${e.register ? " · students sign in" : ""}`
-                                : "Students can copy and paste as usual.";
-  $("start").textContent = e.on ? "Update title" : "Start exam mode";
+                                : "Students can copy and paste as usual. Choose the options below, then start.";
+  $("start").textContent = e.on ? "Apply changes" : "Start exam mode";
   $("stop").disabled = !e.on;
   $("stop").textContent = e.on && e.register ? "Collect work and end exam" : "End exam mode";
-  if (!typed) $("title").value = e.on ? e.title || "" : $("title").value;
-  if (e.on) $("register").checked = !!e.register;
+  $("addTime").hidden = !e.on;
+  $("minutesRow").hidden = !!e.on;
   $("register").disabled = !!e.on && !!e.register;
-  const hasSubs = !!info.folder;
+  $("codeBox").hidden = !(e.on && e.code);
+  $("code").textContent = e.code || "";
+  $("msgCard").hidden = !e.on;
+  $("msgState").textContent = e.message ? `Shown since ${time(e.message.at)}` : "";
+  if (e.on && !dirty) fillForm(e);
+  tick();
+  const hasSubs = !!data.folder;
   $("subs").hidden = !hasSubs;
   if (!hasSubs) return;
-  $("subsTitle").textContent = `${e.on ? "Students" : "Last exam"}: ${e.title || "Exam"} (${info.students.length} signed in)`;
-  $("where").innerHTML = `Saved on this PC in <code>${esc(info.folder)}</code>`;
-  const rows = info.students.map((s, i) => `<tr>
+  $("subsTitle").textContent = `${e.on ? "Students" : "Last exam"}: ${e.title || "Exam"} (${data.students.length} signed in)`;
+  $("where").innerHTML = `Saved on this PC in <code>${esc(data.folder)}</code>`;
+  const rows = data.students.map((s, i) => {
+    const st = s.locked ? `<span class="pill bad" title="${esc(s.locked.reason)}">locked</span>`
+             : e.on ? (s.online ? '<span class="pill ok">online</span>' : '<span class="pill off">offline</span>') : "";
+    const btn = !e.on ? "" : s.locked ? `<button class="sm dl" data-unlock="${esc(s.folder)}">Let back in</button>`
+                                      : `<button class="sm plain" data-lock="${esc(s.folder)}">Lock</button>`;
+    const evs = open.has(s.folder) ? `<div class="ev">${s.events.slice().reverse().map((x) => `${time(x.t)} ${esc(x.name)}${x.detail ? ": " + esc(x.detail) : ""}`).join("<br>") || "nothing noted"}</div>` : "";
+    return `<tr class="${s.locked ? "locked" : ""}">
       <td class="n">${i + 1}</td><td>${esc(s.name)}</td><td>${esc(s.enrolment)}</td><td>${esc(s.pc)}</td>
       <td>${time(s.first)}</td><td>${s.saved ? time(s.saved) : '<span class="muted">nothing yet</span>'}</td>
       <td>${s.files ? `${s.files} (${s.kb} KB)` : ""}</td>
-      <td>${e.on ? (s.online ? '<span class="pill ok">online</span>' : '<span class="pill off">offline</span>') : ""}
-          ${s.twice ? ' <span class="pill warn" title="The same enrolment no. signed in on more than one PC">2 PCs</span>' : ""}</td></tr>`);
-  $("rows").innerHTML = rows.join("") || '<tr><td colspan="8" class="muted">No student has signed in yet.</td></tr>';
+      <td class="alerts">${s.locked ? `<b>${esc(s.locked.reason)}</b><br>` : ""}${s.alerts.map(esc).join("<br>")}
+          ${s.events.length ? `<br><button class="sm plain" data-ev="${esc(s.folder)}">${open.has(s.folder) ? "hide" : "details"}</button>` : ""}${evs}</td>
+      <td>${st}${s.twice ? ' <span class="pill warn" title="The same enrolment no. signed in on more than one PC">2 PCs</span>' : ""}</td>
+      <td>${btn}</td></tr>`;
+  });
+  $("rows").innerHTML = rows.join("") || '<tr><td colspan="10" class="muted">No student has signed in yet.</td></tr>';
 }
+
+function tick() {
+  const e = exam;
+  const on = e && e.on && e.ends_at && !e.timeup;
+  $("timeBox").hidden = !(e && e.on && e.ends_at);
+  if (!e || !e.ends_at) return;
+  const left = e.ends_at * 1000 - (Date.now() + skew);
+  $("left").textContent = e.timeup ? "0:00" : clock(left);
+  $("timeBox").classList.toggle("soon", !on || left < 10 * 60e3);
+}
+setInterval(tick, 1000);
+
+$("rows").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  if (b.dataset.ev) { open.has(b.dataset.ev) ? open.delete(b.dataset.ev) : open.add(b.dataset.ev); show(info); return; }
+  const folder = b.dataset.lock || b.dataset.unlock;
+  if (folder) run(() => post("/__exam/lock", { folder, lock: !!b.dataset.lock }));
+});
 
 async function load() {
   try {
@@ -159,20 +291,31 @@ async function run(fn) {
   try { await fn(); } catch (e) { alert(e.message); }
   document.querySelectorAll("button").forEach((b) => { b.disabled = b.dataset.was === "true"; });
   busy = false;
-  typed = false;
   load();
 }
 
 $("start").onclick = () => run(async () => {
-  await post("/__exam", { on: true, title: $("title").value.trim(), register: $("register").checked });
+  const f = readForm();
+  if (!f.labs.length) throw new Error("Choose at least one lab for the exam.");
+  await post("/__exam", { on: true, ...f });
+  dirty = false;
 });
+$("addTime").onclick = () => run(() => post("/__exam/time", { add: 10 }));
 $("stop").onclick = () => run(async () => {
   if (exam && exam.register) {
     if (!confirm("Collect every student's latest work and end the exam?")) return;
     await collect();
   }
   await post("/__exam", { on: false });
+  dirty = false;
 });
+$("sendMsg").onclick = () => run(async () => {
+  const text = $("message").value.trim();
+  if (!text) throw new Error("Type the message first.");
+  await post("/__exam/message", { text });
+  $("message").value = "";
+});
+$("clearMsg").onclick = () => run(() => post("/__exam/message", { text: "" }));
 $("download").onclick = () => run(async () => {
   if (exam && exam.on) await collect();
   else $("msg").textContent = "";

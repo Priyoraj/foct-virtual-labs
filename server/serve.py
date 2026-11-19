@@ -122,6 +122,23 @@ def add_exam_tag(page):
 
 
 EXAM = ExamMode(EXAM_FILE, SUBMISSIONS)
+ST_COOKIE = "foct_st"     # the signed-in student's token, so the server knows which PC may use the labs
+
+
+def student_cookie(token):
+    return f"{ST_COOKIE}={token}; Path=/; Max-Age=86400; SameSite=Lax; HttpOnly"
+
+
+NOT_IN_EXAM = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Not part of the exam</title>
+<link rel="icon" type="image/png" href="/assets/brand/favicon-32.png"></head>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.5 'Segoe UI',Roboto,Arial,sans-serif;background:#f5f4fb;color:#1d1b33">
+<div style="max-width:460px;padding:28px;background:#fff;border-radius:16px;border-top:6px solid #dc2626;box-shadow:0 12px 40px rgba(30,20,90,.15)">
+<div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:#dc2626">EXAM &middot; FOCT VIRTUAL LABS</div>
+<h1 style="font-size:21px;margin:6px 0 8px">This lab is not part of the exam</h1>
+<p style="margin:0 0 16px;color:#55527a">Your teacher has chosen which labs can be used during this exam.</p>
+<a href="/" style="display:inline-block;background:#342e6c;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:10px">Back to the labs</a>
+</div></body></html>"""
 
 
 class Stats:
@@ -169,8 +186,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         path = urllib.parse.urlsplit(self.path).path
         route = {"/__exam": self.exam_post, "/__exam/collect": self.exam_collect,
-                 "/__exam/register": self.exam_register, "/__exam/upload": self.exam_upload,
-                 "/__exam/done": self.exam_done}.get(path)
+                 "/__exam/time": self.exam_time, "/__exam/message": self.exam_message,
+                 "/__exam/lock": self.exam_lock, "/__exam/register": self.exam_register,
+                 "/__exam/upload": self.exam_upload, "/__exam/done": self.exam_done,
+                 "/__exam/event": self.exam_event, "/__exam/ok": self.exam_ok}.get(path)
         if route:
             return route()
         self.deny()
@@ -189,9 +208,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                    secure=isinstance(self.connection, ssl.SSLSocket)), indent=1)
             return self.send_simple(200, body, "application/json; charset=utf-8", head=head)
         if path == "/__exam":
-            you = EXAM.seen(self.headers.get("X-FoCT-Token"), self.client_address[0])
+            token = self.headers.get("X-FoCT-Token")
+            you = EXAM.seen(token, self.client_address[0])
             body = json.dumps(dict(EXAM.public(), client=self.client_address[0], now=time.time(), you=you))
-            return self.send_simple(200, body, "application/json; charset=utf-8", head=head)
+            cookie = [("Set-Cookie", student_cookie(token))] if you and self.cookie(ST_COOKIE) != token else []
+            return self.send_simple(200, body, "application/json; charset=utf-8", head=head, extra=cookie)
         if path.startswith("/__exam/"):
             if not self.is_local():
                 return self.send_simple(403, "Exam mode can only be managed on the server PC.", head=head, page=True)
@@ -220,7 +241,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
             target = target / "index.html"
             if not target.is_file():
                 return self.send_simple(404, "Not found", head=head, page=True)
+        if not self.is_loopback():                    # the server PC itself is never held back
+            page = MIME.get(target.suffix.lower(), "").startswith("text/html") and self.wants_page()
+            denied = EXAM.gate(self.cookie(ST_COOKIE), path, url.query, page)
+            if denied:
+                if page:
+                    return self.send_not_in_exam(head)
+                return self.send_simple(denied[0], denied[1], head=head)
         self.send_file(target, path, head)
+
+    def send_not_in_exam(self, head):
+        page = add_exam_tag(NOT_IN_EXAM.encode("utf-8"))
+        self.send_response(403)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(page)))
+        self.send_header("Cache-Control", "no-store")
+        self.common_headers("/")
+        self.end_headers()
+        if not head:
+            self.wfile.write(page)
+        STATS.add(self.client_address[0], len(page))
 
     def resolve(self, path):
         norm = posixpath.normpath(path)
@@ -318,12 +358,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         are cached with "Vary: Cookie". After setup installs a new version the cookie changes,
         the cached copies stop matching, and browsers fetch the new files, never a mix."""
         gen = GENERATION.get(self.web_root)
+        exam = EXAM.cache_key()
+        if exam:              # during an exam every file is checked with the server, so its safeguards apply
+            gen = f"{gen}.{exam}"
         if ctype.startswith("text/html"):
             return [("Cache-Control", "no-cache"), ("Vary", "Accept-Encoding, Sec-Fetch-Dest"),
                     ("Set-Cookie", f"{RT_COOKIE}={gen}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly")]
         if path.startswith(MANAGED) and path not in OWN_IN_MANAGED:
             # Without the current cookie (first visit, cookies blocked) fall back to revalidating.
-            keep = self.cookie(RT_COOKIE) == gen
+            keep = self.cookie(RT_COOKIE) == gen and not exam
             return [("Cache-Control", f"max-age={RT_MAX_AGE}" if keep else "no-cache"),
                     ("Vary", "Accept-Encoding, Cookie")]
         return [("Cache-Control", "no-cache"), ("Vary", "Accept-Encoding")]
@@ -339,6 +382,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         """The request comes from the server PC itself."""
         ip = self.client_address[0]
         return ip.startswith("127.") or ip == "::1" or ip in (self.info.get("lan_ips") or [])
+
+    def is_loopback(self):
+        ip = self.client_address[0]
+        return ip.startswith("127.") or ip == "::1"
 
     def admin_ok(self):
         # Only the server PC may manage exam mode. The custom header stops other web pages
@@ -375,10 +422,58 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ValueError
         except (ValueError, TypeError):
             return self.refuse(400, 'Send JSON like {"on": true, "title": "...", "register": true}.')
-        state = EXAM.set(bool(data["on"]), data.get("title"), data.get("register", True))
+        try:
+            state = EXAM.configure(bool(data["on"]), data.get("title"), data.get("register", True),
+                                   data.get("labs"), bool(data.get("code")), data.get("allow", ""),
+                                   int(data.get("minutes") or 0), data.get("opts"))
+        except ValueError as e:
+            return self.refuse(400, f"Please check the list of exam PCs: {e}")
         title = f": {state['title']}" if state["on"] and state["title"] else ""
         print(f"{time.strftime('%H:%M')}  EXAM MODE {'ON' if state['on'] else 'OFF'}{title}", flush=True)
         self.reply_json(state)
+
+    def exam_time(self):
+        if not self.admin_ok():
+            return
+        try:
+            data = self.read_json()
+            self.reply_json(EXAM.add_time(int(data.get("add", 10))))
+        except (ValueError, TypeError):
+            self.refuse(400, "bad request")
+
+    def exam_message(self):
+        if not self.admin_ok():
+            return
+        try:
+            self.reply_json({"message": EXAM.send_message(self.read_json().get("text"))})
+        except (ValueError, TypeError):
+            self.refuse(400, "bad request")
+
+    def exam_lock(self):
+        if not self.admin_ok():
+            return
+        try:
+            data = self.read_json()
+            found = EXAM.teacher_lock(str(data.get("folder", "")), bool(data.get("lock")))
+        except (ValueError, TypeError):
+            return self.refuse(400, "bad request")
+        self.reply_json({"ok": found})
+
+    def exam_event(self):
+        try:
+            data = self.read_json()
+            r = EXAM.event(self.headers.get("X-FoCT-Token"), str(data.get("kind", "")), data.get("detail", ""),
+                           int(data.get("count") or 1), float(data.get("secs") or 0))
+        except (ValueError, TypeError):
+            return self.refuse(400, "bad request")
+        if r["new"]:
+            print(f"{time.strftime('%H:%M')}  LOCKED: {r['who']} - {r['locked']['reason']}", flush=True)
+        self.reply_json({"locked": r["locked"]})
+
+    def exam_ok(self):
+        if int(self.headers.get("Content-Length") or 0):
+            self.rfile.read(min(int(self.headers["Content-Length"]), 4096))
+        self.reply_json({"locked": EXAM.ok(self.headers.get("X-FoCT-Token"))})
 
     def exam_collect(self):
         if not self.admin_ok():
@@ -390,13 +485,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def exam_register(self):
         try:
             data = self.read_json()
-            token, rec = EXAM.register(data.get("exam"), data.get("name"), data.get("enrolment"), self.client_address[0])
+            token, rec = EXAM.register(data.get("exam"), data.get("name"), data.get("enrolment"), data.get("code"),
+                                       self.client_address[0])
         except PermissionError as e:
             return self.refuse(409, str(e))
         except (ValueError, TypeError) as e:
             return self.refuse(400, str(e) if str(e) and " " in str(e) else "Please check your name and enrolment number.")
         print(f"{time.strftime('%H:%M')}  signed in: {rec['name']} ({rec['enrolment']}) from {self.client_address[0]}", flush=True)
-        self.reply_json({"token": token, "name": rec["name"], "enrolment": rec["enrolment"], "folder": rec["folder"]})
+        body = json.dumps({"token": token, "name": rec["name"], "enrolment": rec["enrolment"], "folder": rec["folder"]})
+        self.send_simple(200, body, "application/json; charset=utf-8", extra=[("Set-Cookie", student_cookie(token))])
 
     def exam_upload(self):
         try:
@@ -462,7 +559,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return False
         return False
 
-    def send_simple(self, code, text, ctype="text/plain; charset=utf-8", head=False, page=False):
+    def send_simple(self, code, text, ctype="text/plain; charset=utf-8", head=False, page=False, extra=()):
         if page:
             ctype = "text/html; charset=utf-8"
             text = ("<!doctype html><meta charset=utf-8><title>%d</title>"
@@ -474,6 +571,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for name, value in extra:
+            self.send_header(name, value)
         self.common_headers(urllib.parse.urlsplit(self.path).path)
         self.end_headers()
         if not head:

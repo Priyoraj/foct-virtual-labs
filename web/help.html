@@ -131,6 +131,8 @@
     <li><b>Out of memory / blank page:</b> close other tabs; the Office and Java labs need a PC with at least 4&nbsp;GB of RAM.</li>
     <li><b>Lost work:</b> open the same lab on the same PC and browser: the last draft is restored automatically.</li>
     <li><b>Copy and paste do not work and the page has a red &ldquo;EXAM MODE&rdquo; frame:</b> the lab is in exam mode. Your teacher ends it after the exam, and the page returns to normal by itself.</li>
+    <li><b>&ldquo;Exam paused on this PC&rdquo;:</b> the exam found the developer tools open or a protection changed, you left the exam window too often, or your teacher paused you. Close the developer tools and undo any changes; the page unlocks by itself when everything is normal, or your teacher lets you back in. Work you did before is safe.</li>
+    <li><b>&ldquo;This lab is not part of the exam&rdquo;:</b> your teacher chose which labs can be used; go back to the home page and open one of those.</li>
     <li><b>The page asks for your name and enrolment no.:</b> an exam is starting. Type them carefully; they name the folder your teacher receives. Your work in the labs, and every file you save or download, then goes to your teacher by itself. To hand in any other file, for example one from your Downloads folder, use <b>Submit files</b> in the red bar.</li>
   </ul>
 
@@ -161,6 +163,13 @@ python server/serve.py --https    (also serve secure mode on port 8443)</pre>
       <li>The control page lists who has signed in.</li>
       <li><b>Download submissions (.zip)</b> asks every PC for its latest work, then saves <i>Exam&nbsp;title</i>.zip to your Downloads folder: one folder per student, named <i>Name_Enrolment</i>, and a roster.csv.</li>
       <li>The same folders are kept on the server PC in <code>submissions</code>.</li>
+    </ul>
+    <p><b>Safeguards</b> (chosen on the same page):</p>
+    <ul>
+      <li><b>Enforced by the server:</b> only the labs you allow, the labs only for signed-in PCs that keep checking in, an exam code for the board, a list of allowed PCs, and a time limit that collects the work and locks the labs.</li>
+      <li><b>In each page:</b> no opening files or example programs, no right-click, developer-tools keys or printing; leaving the window, leaving full screen (optional), large insertions in an editor and a second screen are noted.</li>
+      <li><b>Tamper lock:</b> if a page finds developer tools open, or a protection removed, that PC is paused until everything is back to normal, or until you let the student back in.</li>
+      <li>You can also lock a student yourself and send a message to every screen. Every alert is listed per student and saved in the zip (incidents.csv).</li>
     </ul>
     <p>Press <b>Collect work and end exam</b> afterwards. Only the server PC can switch exam mode or download submissions, and exam mode stays on if the server restarts. It stops casual copying. For strict exams, also turn off the browser&rsquo;s developer tools with the Edge or Chrome policy <i>DeveloperToolsAvailability</i>&nbsp;=&nbsp;2.</p>
   </div>
