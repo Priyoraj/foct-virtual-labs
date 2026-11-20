@@ -128,6 +128,8 @@
           <select id="helper_usb"><option value="pause">pause the exam on that PC until it is removed</option><option value="note">only note it here</option></select></div>
         <label class="f" for="helper_kill">Programs to close and keep closed <span class="links"><button type="button" id="killDefault">default list</button></span></label>
         <textarea id="helper_kill" spellcheck="false"></textarea>
+        <label class="f" for="helper_servers">The lab&rsquo;s other servers <span class="muted">(optional; start this exam on them too, with the same title and options. If this server stops, the helper moves its PC to the next one. Set this before downloading the helper.)</span></label>
+        <input type="text" id="helper_servers" placeholder="e.g. 192.168.1.11:8080, 192.168.1.12:8080" spellcheck="false">
       </div>
     </details>
 
@@ -149,6 +151,7 @@
     <div class="muted" id="where"></div>
     <div class="row">
       <button class="dl" id="download">Download submissions (.zip)</button>
+      <a href="/__exam/merge" style="font-weight:700;color:inherit">Check similarity, or merge the zips of several servers &rarr;</a>
       <span id="msg" class="muted"></span>
     </div>
     <div class="muted" id="helperPcs"></div>
@@ -167,6 +170,7 @@
       <li><b>The server itself</b> serves only the labs you allow. With sign-in it serves them only to PCs that are signed in, not locked, and checking in every few seconds; a PC whose exam script is switched off gets no labs. Sign-in can need the exam code and one of the listed PCs. When the time limit runs out, the work is collected and the labs lock.</li>
       <li><b>Safeguards in each page</b> (above) block opening files, example programs, developer-tools keys, right-click and printing, and notice leaving the window, leaving full screen, text that appears 200+ characters at once in an editor, and a second screen (secure mode only). Each page also checks itself: developer tools open, or a protection removed, locks that PC.</li>
       <li><b>Alerts</b> appear in the table below, and <b>Download submissions</b> puts them in the zip: roster.csv, incidents.csv and each student&rsquo;s _student.txt.</li>
+      <li><b><a href="/__exam/merge" style="color:inherit">Merge and check similarity</a></b> compares every student&rsquo;s work with everyone else&rsquo;s, lab by lab, and shows what matches side by side, ready for marking. With several lab servers it first merges their zips into one folder per student.</li>
       <li>This stops casual cheating. A student who knows how to rewrite the exam script itself could still get around the checks inside the browser, but not the server&rsquo;s part. To make it airtight, also turn off developer tools on the lab PCs with the Edge/Chrome policy <i>DeveloperToolsAvailability</i> = 2.</li>
     </ul>
   </div>
@@ -202,7 +206,7 @@ function readForm() {
             leave_limit: +$("leave_limit").value || 3, fullscreen: $("fullscreen").checked, chromium_only: $("chromium_only").checked,
             helper: $("helper").checked, helper_taskmgr: $("helper_taskmgr").checked, helper_admin: $("helper_admin").checked,
             helper_internet: $("helper_internet").checked,
-            helper_usb: $("helper_usb").value, helper_kill: $("helper_kill").value },
+            helper_usb: $("helper_usb").value, helper_kill: $("helper_kill").value, helper_servers: $("helper_servers").value },
   };
 }
 function fillForm(e) {
@@ -220,8 +224,16 @@ function fillForm(e) {
   for (const k of ["helper", "helper_taskmgr", "helper_admin", "helper_internet"]) $(k).checked = !!o[k];
   $("helper_usb").value = o.helper_usb === "note" ? "note" : "pause";
   $("helper_kill").value = o.helper_kill || "";
+  $("helper_servers").value = (o.helper_servers || "").split(" ").filter(Boolean).join(", ");
+  helperLink();
+}
+// The helper downloaded here knows the servers typed above, even before the exam starts.
+function helperLink() {
+  const s = $("helper_servers").value.trim();
+  $("helperLink").href = "/exam-helper.vbs" + (s ? "?servers=" + encodeURIComponent(s) : "");
 }
 $("killDefault").onclick = () => { if (info) { $("helper_kill").value = info.helper_kill; dirty = true; } };
+$("helper_servers").addEventListener("input", helperLink);
 $("helper").addEventListener("input", () => { $("helperOpts").style.opacity = $("helper").checked ? 1 : .55; });
 
 function helperCell(h) {

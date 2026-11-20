@@ -260,7 +260,10 @@ they can start. It needs no administrator rights. While the exam runs, it:
   recording tools, terminals, Task Manager, regedit and calculators. Windows itself and the
   exam window are never touched.
 * **Opens the exam in its own Edge window** in kiosk mode: full screen, no address bar, no tabs,
-  and no internet (only the lab server can be reached). If the student closes it, it opens again.
+  and no internet (only the lab servers can be reached). If the student closes it, it opens again.
+* **Moves to another lab server** when the lab has several and the PC's server stops answering
+  for 30 seconds: it opens the exam window on the next server that runs the exam, where the student
+  signs in again (see [Similarity check, and several lab servers](#similarity-check-and-several-lab-servers)).
 * **Turns off Task Manager and the clipboard history** (optional).
 * **Watches and reports to the server:** USB drives (optionally pausing the exam on that PC until
   the drive is removed), a second screen, and the programs it had to close. It refuses to run in a
@@ -272,9 +275,9 @@ they can start. It needs no administrator rights. While the exam runs, it:
   network keeps working. Made for labs with static IP addresses:
   * The helper takes the default routes (IPv4 and IPv6) out of the PC's *active* routing table
     only. The PC's network settings (IP address, mask, gateway, DNS) are never changed.
-  * PCs on the lab's own subnet need no gateway, so the lab server, and every other PC there,
-    can still be reached. If the lab server is on another subnet, the helper first gives it a
-    route of its own through the gateway.
+  * PCs on the lab's own subnet need no gateway, so the lab servers, and every other PC there,
+    can still be reached. A lab server on another subnet first gets a route of its own through
+    the gateway.
   * A default route that comes back (the cable plugged in again, a Wi-Fi network or phone hotspot
     joined) is taken out again within 3 seconds.
   * If the lab server cannot be reached without the internet, the helper leaves the internet on
@@ -304,7 +307,7 @@ they can start. It needs no administrator rights. While the exam runs, it:
   once, because Windows rebuilds the active routing table from the PC's network settings at every
   start. Nothing can be left cut off for good.
 * Running it with `/restore` does the same by hand.
-* If the lab server cannot be reached for 30 minutes, the helper puts the PC back by itself.
+* If no lab server can be reached for 30 minutes, the helper puts the PC back by itself.
 
 **Getting it onto the PCs.**
 
@@ -329,6 +332,72 @@ Microsoft has announced that VBScript will be phased out in a future Windows ver
   imitating it takes real effort.
 * Phones and cameras are outside any software's reach.
 
+### Similarity check, and several lab servers
+
+**Merge and check similarity** (on the exam control page, or `http://localhost:8080/__exam/merge`)
+compares every student's work with everyone else's, lab by lab, and writes a report to mark from.
+With several lab servers it first merges their zips.
+
+**How it compares** (the method of MOSS and JPlag):
+
+* Each program becomes tokens with names, numbers, texts, comments and spacing set aside, so
+  renaming variables or changing messages does not hide copying.
+* Greedy string tiling finds the longest stretches two students share, in any order, so moving
+  functions around does not hide it either.
+* Code from the files you gave the students (starter code, the question's notebook) never counts.
+  Standard code that many students have (more than 15% of them by default: textbook functions, the
+  usual loops, the question's data) counts only where it is part of a longer stretch that the two
+  students alone share. A whole copied program still counts; a standard loop on its own does not.
+* It covers C, C++, Java, Python, Jupyter notebooks (code cells), Lex & Yacc, SQL, MongoDB, SPICE,
+  and Word, Excel and PowerPoint files and text (word by word). The very same file in two students'
+  folders is listed as an identical file.
+
+**The report** (`similarity-report.html`: one file that works offline):
+
+* For each pair: how much of each student's own code is in the other's work, and a level: Very high
+  (80%+), High (60–79%), Medium (40–59%), Low (25–39%).
+* How it matches, in words: copied as it is (same names and texts), names changed (disguised),
+  parts moved, identical comments (strong evidence), identical files, or a short program, where
+  similar answers are common.
+* The two pieces of work side by side, matching parts in the same colour and number, with each
+  student's exam alerts next to them (a large insertion at 10:42, leaving the window ...).
+* Groups of three or more students who share one solution, and the most widely shared standard code.
+* A decision for each pair (not copied, ask the students, partly copied, copied) with a note, and
+  CSV files for the marks sheet: one row per pair, and one per student.
+* **Download PDF** (in the report, or on the merge page): an A4 document for the file, made in the
+  browser, so it works offline too. It has the summary, how to read it, every student, the pairs,
+  groups, identical files, and the matching code of every Very high and High pair (and of every pair
+  you recorded a decision on), each part in its colour with line numbers, the exam alerts and your
+  decision with its note.
+* Similarity is evidence, not proof: the report says so, and it cannot tell who copied from whom.
+
+Everything runs on the lab server. Nothing is sent anywhere; MOSS, by contrast, needs the students'
+code sent to its server in the USA. On any PC with Python, the same check runs from the command
+line:
+
+```bat
+python server\similarity.py "Server 1.zip" "Server 2.zip" --base starter.c --out D:\Exams
+```
+
+**With several lab servers** (so that a failed server does not stop the exam):
+
+* Start the exam on every server with the same title, options and exam code.
+* If a server stops, its students open another server's address and sign in again. What they had
+  sent stays on the first server. Work they had not sent yet stays in their browser under the first
+  address, because each address has its own browser storage.
+* Afterwards, press **Download submissions** on each server, bring the zips to one server (a pen
+  drive or a shared folder) and add them on its *Merge and check similarity* page. Each zip names
+  its server (`exam.json`), so the students are merged by enrolment number: their newest copy of
+  each file goes into their folder, the other copies into `Other copies/<server>/`, and `roster.csv`,
+  `incidents.csv` and `servers.csv` cover every server.
+* Keep the servers' clocks right: "newest" means newest by each server's clock.
+* With the exam helper, type the lab's other servers on the control page (*The lab's other
+  servers*) before you download the helper; each server also tells running helpers about the
+  others. If a PC's server stops answering for 30 seconds, its helper moves the PC to the next
+  server that runs the exam: the exam window opens there and the student signs in again, and that
+  server notes "moved here from ...". A helper started while its server is down goes straight to
+  another one. The PC goes back to normal when the exam ends on the server it is using.
+
 ## Project layout
 
 ```
@@ -338,6 +407,9 @@ server/make_cert.py        lab CA + HTTPS certificate
 server/exam-control.html   exam mode switch, roster and zip download (/__exam/control, server PC only)
 server/exam_mode.py        exam state, student sign-in, submissions, safeguards and the zip
 server/exam-helper.vbs     exam helper for the student PCs (served at /exam-helper.vbs with this server's address)
+server/similarity.py       merging several servers' zips, and the similarity check (also a command-line tool)
+server/exam-merge.html     Merge and check similarity page (/__exam/merge, server PC only)
+server/similarity-report.html  the report's page; the check fills in its data
 submissions/               the students' exam work, one folder per exam   (created in exams)
 tools/setup.py             downloads and patches all third-party runtimes into web/
 tools/javasdk.py           repairs the TeaVM javac class library (TeaVM @Rename/@Remove)

@@ -102,12 +102,19 @@ GENERATION = RuntimeGeneration()
 # sends their work here. Exam mode is switched on the server PC at /__exam/control and survives
 # a server restart (server/exam-state.json). Submissions: submissions/<exam>/<student>/ (exam_mode.py).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from exam_mode import ExamMode  # noqa: E402
+from exam_mode import ExamMode, server_list  # noqa: E402
+import similarity  # noqa: E402
 
 EXAM_FILE = Path(__file__).resolve().parent / "exam-state.json"
 EXAM_CONTROL = Path(__file__).resolve().parent / "exam-control.html"
+EXAM_MERGE = Path(__file__).resolve().parent / "exam-merge.html"
 EXAM_HELPER = Path(__file__).resolve().parent / "exam-helper.vbs"
 SUBMISSIONS = ROOT / "submissions"
+# Merging the zips of several lab servers and the similarity check (similarity.py): uploads and
+# results of each run in submissions/.merge/<job>/, the merged exam in submissions/<title> (merged)/.
+MERGE = similarity.Jobs(SUBMISSIONS / ".merge", SUBMISSIONS)
+MERGE_ZIP_MAX = 4 * 1024 ** 3
+MERGE_BASE_MAX = 5 * 1024 ** 2
 EXAM_TAG = b'<script src="/assets/js/exam.js"></script>'
 EXAM_TAG_VERSION = "x1"   # change with EXAM_TAG so browsers replace pages they cached with the old tag
 HEAD_RE = re.compile(rb"<head(?:\s[^>]*)?>", re.I)
@@ -192,7 +199,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                  "/__exam/upload": self.exam_upload, "/__exam/done": self.exam_done,
                  "/__exam/event": self.exam_event, "/__exam/ok": self.exam_ok,
                  "/__exam/agent/hello": self.agent_hello, "/__exam/agent/beat": self.agent_beat,
-                 "/__exam/agent/bye": self.agent_bye}.get(path)
+                 "/__exam/agent/bye": self.agent_bye, "/__exam/merge/add": self.merge_add,
+                 "/__exam/merge/remove": self.merge_remove, "/__exam/merge/run": self.merge_run}.get(path)
         if route:
             return route()
         self.deny()
@@ -211,7 +219,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                    secure=isinstance(self.connection, ssl.SSLSocket)), indent=1)
             return self.send_simple(200, body, "application/json; charset=utf-8", head=head)
         if path == "/exam-helper.vbs":
-            return self.send_helper(head)
+            return self.send_helper(head, url.query)
         if path == "/__exam":
             token = self.headers.get("X-FoCT-Token")
             you = EXAM.seen(token, self.client_address[0])
@@ -232,6 +240,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send_simple(200, json.dumps(EXAM.roster()), "application/json; charset=utf-8", head=head)
             if path == "/__exam/zip":
                 return self.send_zip(head)
+            if path.startswith("/__exam/merge"):
+                return self.merge_get(path, url.query, head)
             return self.send_simple(404, "Not found", head=head, page=True)
         target = self.resolve(path)
         if target is None:
@@ -434,7 +444,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                    data.get("labs"), bool(data.get("code")), data.get("allow", ""),
                                    int(data.get("minutes") or 0), data.get("opts"))
         except ValueError as e:
-            return self.refuse(400, f"Please check the list of exam PCs: {e}")
+            return self.refuse(400, str(e) if str(e).startswith("Please") else f"Please check the list of exam PCs: {e}")
         title = f": {state['title']}" if state["on"] and state["title"] else ""
         print(f"{time.strftime('%H:%M')}  EXAM MODE {'ON' if state['on'] else 'OFF'}{title}", flush=True)
         self.reply_json(state)
@@ -488,12 +498,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
         scheme = "https" if isinstance(self.connection, ssl.SSLSocket) else "http"
         return f"{scheme}://{host}"
 
-    def send_helper(self, head):
+    def send_helper(self, head, query=""):
         try:
             text = EXAM_HELPER.read_text(encoding="utf-8")
         except OSError:
             return self.send_simple(404, "Not found", head=head, page=True)
-        text = text.replace("__FOCT_SERVER__", self.server_url()).replace("\r\n", "\n").replace("\n", "\r\n")
+        me = self.server_url()
+        # Every lab server of the exam, this one first: if it stops, the helper moves its PC to the next.
+        # The control page passes the servers the teacher typed (?servers=), so a helper downloaded
+        # before the exam starts knows them too.
+        others = EXAM.helper_servers()
+        typed = (urllib.parse.parse_qs(query).get("servers") or [""])[0]
+        if typed and self.is_local():
+            try:
+                others = server_list(typed)
+            except ValueError as e:
+                return self.send_simple(400, str(e), head=head, page=True)
+        servers = " ".join([me] + [s for s in others if s.lower() != me.lower()])
+        text = text.replace("__FOCT_SERVERS__", servers).replace("__FOCT_SERVER__", me)
+        text = text.replace("\r\n", "\n").replace("\n", "\r\n")
         body = text.encode("ascii", "replace")
         self.send_response(200)
         self.send_header("Content-Type", "application/octet-stream")
@@ -578,9 +601,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.refuse(400, "bad request")
         self.reply_json({"ok": True})
 
+    def server_info(self):
+        """This lab server, as written into its submissions zip (for merging zips from several servers)."""
+        return {"name": self.info.get("hostname") or "", "address": self.server_url(), "version": VERSION}
+
     def send_zip(self, head):
         try:
-            f, size, name = EXAM.zip_file()
+            f, size, name = EXAM.zip_file(self.server_info())
         except FileNotFoundError as e:
             return self.send_simple(404, str(e), head=head, page=True)
         with f:
@@ -599,6 +626,101 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, socket.timeout):
                     self.close_connection = True
         print(f"{time.strftime('%H:%M')}  submissions downloaded: {name} ({size // 1024} KB)", flush=True)
+
+    # ------------------------------------------------------------ merging several servers' zips, similarity check
+    def merge_get(self, path, query, head):
+        if path == "/__exam/merge":
+            try:
+                page = EXAM_MERGE.read_text(encoding="utf-8")
+            except OSError:
+                return self.send_simple(404, "Not found", head=head, page=True)
+            return self.send_simple(200, page, "text/html; charset=utf-8", head=head)
+        job = (urllib.parse.parse_qs(query).get("job") or [""])[0]
+        try:
+            if path == "/__exam/merge/status":
+                return self.send_simple(200, json.dumps(MERGE.status(job)), "application/json; charset=utf-8", head=head)
+            if path in ("/__exam/merge/report", "/__exam/merge/zip"):
+                target, name = MERGE.result_file(job, "report" if path.endswith("report") else "zip")
+                if path.endswith("report"):
+                    return self.send_path(target, "text/html; charset=utf-8", None, head)
+                return self.send_path(target, "application/zip", name, head)
+        except (ValueError, FileNotFoundError, OSError):
+            return self.send_simple(404, "This merge is not there any more. Run it again.", head=head, page=True)
+        return self.send_simple(404, "Not found", head=head, page=True)
+
+    def send_path(self, target, ctype, download_name, head):
+        size = target.stat().st_size
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(size))
+        if download_name:
+            ascii_name = download_name.encode("ascii", "replace").decode().replace("?", "_").replace('"', "'")
+            self.send_header("Content-Disposition", f"attachment; filename=\"{ascii_name}\"; "
+                                                    f"filename*=UTF-8''{urllib.parse.quote(download_name)}")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        if head:
+            return
+        try:
+            with open(target, "rb") as f:
+                while chunk := f.read(256 * 1024):
+                    self.wfile.write(chunk)
+        except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, socket.timeout):
+            self.close_connection = True
+
+    def merge_add(self):
+        """One submissions zip from a lab server (X-FoCT-Kind: zip), or a file the teacher gave the students
+        (X-FoCT-Kind: base), in the request body."""
+        if not self.admin_ok():
+            return
+        kind = self.headers.get("X-FoCT-Kind", "zip")
+        try:
+            length = int(self.headers.get("Content-Length") or -1)
+            job, info = MERGE.add(self.headers.get("X-FoCT-Job", ""), kind,
+                                  urllib.parse.unquote(self.headers.get("X-FoCT-Name", "")), length, self.rfile,
+                                  MERGE_ZIP_MAX if kind == "zip" else MERGE_BASE_MAX)
+        except (ValueError, OSError) as e:
+            return self.refuse(400, str(e) or "Upload failed.")
+        self.reply_json({"job": job, "file": info})
+
+    def merge_remove(self):
+        if not self.admin_ok():
+            return
+        try:
+            data = self.read_json()
+            MERGE.remove(str(data.get("job", "")), str(data.get("kind", "zip")), str(data.get("name", "")))
+        except (ValueError, TypeError):
+            return self.refuse(400, "bad request")
+        self.reply_json({"ok": True})
+
+    def merge_run(self):
+        """Start merging: the uploaded zips, and this server's own exam if asked for."""
+        if not self.admin_ok():
+            return
+        try:
+            data = self.read_json()
+            job = str(data.get("job") or "")
+            try:
+                MERGE.status(job)
+            except ValueError:
+                job = MERGE.new()
+            local = None
+            if data.get("local"):
+                f, size, name = EXAM.zip_file(self.server_info())
+                local = SUBMISSIONS / ".merge" / job / "local" / name
+                local.parent.mkdir(parents=True, exist_ok=True)
+                with f, open(local, "wb") as out:
+                    while chunk := f.read(1 << 20):
+                        out.write(chunk)
+            share = min(0.9, max(0.05, float(data.get("share") or similarity.COMMON_SHARE * 100) / 100))
+            MERGE.start(job, str(data.get("title") or "")[:120], share, bool(data.get("check", True)), local)
+        except FileNotFoundError as e:
+            return self.refuse(400, str(e))
+        except (ValueError, TypeError, OSError) as e:
+            return self.refuse(400, str(e) or "bad request")
+        print(f"{time.strftime('%H:%M')}  merging submissions (job {job})", flush=True)
+        self.reply_json({"job": job})
 
     def cookie(self, name):
         for part in self.headers.get("Cookie", "").split(";"):

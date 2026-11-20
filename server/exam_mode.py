@@ -86,7 +86,8 @@ OPTS = {"block_open": True,      # opening files from the PC / pen drive, and th
         "helper_admin": True,    # ... and, with administrator rights: developer tools off, USB drives blocked
         "helper_internet": True,  # ... and, with administrator rights: no internet on the PC, the lab network still works
         "helper_usb": "pause",   # a USB drive on the PC: "pause" the exam there while it is connected, or "note" it
-        "helper_kill": HELPER_KILL}
+        "helper_kill": HELPER_KILL,
+        "helper_servers": ""}    # the lab's other servers ("http://host:port ..."): if this one stops, the helper moves there
 EVENT_KINDS = {"left", "fullscreen", "devtools", "tamper", "bigins", "screen2", "blocked"}
 EVENT_NAMES = {"left": "Left the exam window", "fullscreen": "Left full screen", "devtools": "Developer tools opened",
                "tamper": "Exam protection changed", "bigins": "Large insertion in an editor", "screen2": "Second screen",
@@ -166,6 +167,28 @@ def labs_for(path, query, page):
         if path.startswith(prefix):
             return labs
     return None
+
+
+def server_list(text):
+    """The lab's other servers, from what the teacher typed: ['http://host:port', ...]. A missing port is
+    the lab server's usual one (8080, or 8443 for https). Raises ValueError for a typing mistake."""
+    out = []
+    for part in re.split(r"[\s,;]+", str(text or "")):
+        part = part.strip().rstrip("/")
+        if not part:
+            continue
+        if not re.match(r"https?://", part, re.I):
+            part = "http://" + part
+        m = re.fullmatch(r"(https?)://([A-Za-z0-9][A-Za-z0-9.\-]*)(?::(\d{1,5}))?", part, re.I)
+        if not m:
+            raise ValueError(f"Please check the other lab servers: {part} is not an address like http://192.168.1.11:8080.")
+        scheme = m.group(1).lower()
+        url = f"{scheme}://{m.group(2).lower()}:{m.group(3) or (8443 if scheme == 'https' else 8080)}"
+        if url not in out:
+            out.append(url)
+    if len(out) > 8:
+        raise ValueError("Please check the other lab servers: at most 8.")
+    return out
 
 
 def chromium_browser(user_agent):
@@ -295,6 +318,7 @@ class ExamMode:
             o[k] = bool(o[k])
         o["helper_usb"] = "note" if o["helper_usb"] == "note" else "pause"
         o["helper_kill"] = ", ".join(dict.fromkeys(m.group(0).lower() for m in EXE_RE.finditer(str(o["helper_kill"] or ""))))
+        o["helper_servers"] = " ".join(server_list(o.get("helper_servers")))     # raises ValueError for a typing mistake
         with self.lock:
             s = self.state
             title = str(title or "").strip()[:120]
@@ -410,6 +434,7 @@ class ExamMode:
                     r.update(name=name, seen=time.time())
                     kept, restore = self._set_aside(r)
                     self._log(r, "again", f'earlier work kept in "{kept}"' if kept else "")
+                    self._note_move(r, ip)
                     self._save()
                     return t, r, restore
             folder = safe_name(f"{name}_{enrolment}", fallback="student", limit=120)
@@ -423,8 +448,16 @@ class ExamMode:
                    "saved": None, "files": {}, "done": 0, "locked": None, "events": [], "counts": {}}
             self.students[token] = rec
             (self.exam_dir() / folder).mkdir(parents=True, exist_ok=True)
+            self._note_move(rec, ip)
             self._save()
             return token, rec, []
+
+    def _note_move(self, rec, ip):
+        """The PC came here because its lab server stopped answering: note it with the student (lock held)."""
+        ag = self._agent_for(ip) if self.state["opts"].get("helper") else None
+        if ag and ag.get("from") and not ag.get("noted"):
+            ag["noted"] = True
+            self._log(rec, "helper", f"moved here from {ag['from']}, which stopped answering")
 
     def _set_aside(self, rec):
         """Before a student who signs in again can replace anything: move what they sent so far into
@@ -575,7 +608,13 @@ class ExamMode:
     def helper_settings(self):
         o = self.state["opts"]
         return {"taskmgr": bool(o["helper_taskmgr"]), "admin": bool(o["helper_admin"]),
-                "internet": bool(o.get("helper_internet")), "kill": o["helper_kill"]}
+                "internet": bool(o.get("helper_internet")), "kill": o["helper_kill"],
+                "servers": o.get("helper_servers") or ""}
+
+    def helper_servers(self):
+        """The lab's other servers, for the exam helper that this server hands out."""
+        with self.lock:
+            return (self.state["opts"].get("helper_servers") or "").split()
 
     def agent_hello(self, ip, info):
         """A PC's exam helper starts. Returns its token, the kiosk key for the exam browser and the settings."""
@@ -595,7 +634,9 @@ class ExamMode:
             now = time.time()
             self.agents[token] = {"ip": ip, "pc": pc, "user": re.sub(r"[^\w .\-@]", "", str(info.get("user") or ""))[:40],
                                   "version": str(info.get("version") or "")[:10], "kiosk": kiosk, "first": now,
-                                  "beat": now, "status": {"ready": False}}
+                                  "beat": now, "status": {"ready": False},
+                                  # the lab server the helper moved away from (it stopped answering)
+                                  "from": re.sub(r"[^\w.:/\-]", "", str(info.get("from") or ""))[:80]}
             for rec in self._students_on(ip):
                 self._log(rec, "helper", "exam helper started")
             self._save()
@@ -773,8 +814,10 @@ class ExamMode:
                 "admin": st.get("admin"), "devtools": st.get("devtools"), "usbblock": st.get("usbblock"),
                 "netoff": st.get("netoff"), "usb": st.get("usb"), "screens": st.get("screens"), "problem": st.get("problem")}
 
-    def zip_file(self):
-        """The exam folder as a zip in a temporary file: <title>/<Name>_<Enrolment>/..., roster.csv, incidents.csv."""
+    def zip_file(self, server=None):
+        """The exam folder as a zip in a temporary file: <title>/<Name>_<Enrolment>/..., roster.csv, incidents.csv,
+        and exam.json (the exam and this server, so zips from several lab servers can be merged:
+        server/similarity.py). server: {"name", "address", "version"} of this lab server."""
         with self.lock:
             s = dict(self.state)
             students = [dict(r) for r in self.students.values()]
@@ -785,6 +828,10 @@ class ExamMode:
         stamp = lambda t: time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t)) if t else ""  # noqa: E731
         out = tempfile.TemporaryFile()
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+            z.writestr(f"{top}/exam.json", json.dumps({
+                "app": "FoCT Virtual Labs", "kind": "submissions", "title": s["title"], "id": s["id"],
+                "folder": s["folder"], "started": s["since"], "ended": s["ended"], "zipped": time.time(),
+                "students": len(info["students"]), "server": server or {}}, indent=1))
             buf = io.StringIO()
             w = csv.writer(buf)
             w.writerow(["Name", "Enrolment no.", "Folder", "PC", "Signed in", "Last saved", "Files", "Size (KB)",

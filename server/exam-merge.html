@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Merge and check similarity · FoCT Virtual Labs</title>
+<link rel="icon" type="image/png" href="/assets/brand/favicon-32.png">
+<style>
+  :root { color-scheme: light dark; --navy: #342e6c; --red: #dc2626; --bg: #f5f4fb; --card: #fff; --line: #e3e1f2; --text: #1d1b33; --muted: #6b6890; --ok: #15803d; --warn: #b45309; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15142a; --card: #1f1d3a; --line: #34325c; --text: #ecebf8; --muted: #a9a6cf; --ok: #4ade80; --warn: #fbbf24; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  main { max-width: 900px; margin: 28px auto; padding: 0 16px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  header img { width: 46px; height: 46px; border-radius: 50%; background: #fff; padding: 2px; }
+  header h1 { font-size: 1.4rem; margin: 0; } header small { display: block; color: var(--muted); font-size: .85rem; font-weight: 500; }
+  header a { margin-left: auto; color: var(--muted); font-weight: 600; font-size: .9rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; box-shadow: 0 6px 24px rgba(30, 20, 90, .08); margin-bottom: 16px; }
+  h2 { font-size: 1.05rem; margin: 0 0 6px; }
+  .muted { color: var(--muted); font-size: .92rem; }
+  .drop { margin-top: 12px; border: 2px dashed var(--line); border-radius: 12px; padding: 18px; text-align: center; color: var(--muted); }
+  .drop.over { border-color: var(--navy); background: rgba(52, 46, 108, .06); }
+  .check { display: flex; gap: 9px; align-items: flex-start; margin: 10px 0 0; }
+  .check input { margin-top: 4px; width: 16px; height: 16px; accent-color: var(--navy); flex: none; }
+  input[type=text], input[type=number] { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px; }
+  input[type=text] { width: 100%; } input[type=number] { width: 80px; }
+  label.f { display: block; font-weight: 600; margin: 14px 0 6px; }
+  button { font: inherit; font-weight: 700; padding: 9px 16px; border-radius: 10px; border: 0; cursor: pointer; color: #fff; background: var(--navy); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.plain { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button.sm { padding: 3px 10px; font-size: .82rem; border-radius: 8px; }
+  button.go { background: #0f766e; }
+  a.btn { display: inline-block; font-weight: 700; padding: 9px 16px; border-radius: 10px; color: #fff; background: var(--navy); text-decoration: none; }
+  a.btn.go { background: #0f766e; }
+  .row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; margin-top: 10px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .82rem; }
+  .err { color: var(--red); font-weight: 600; }
+  .ok { color: var(--ok); font-weight: 600; }
+  .warn { color: var(--warn); }
+  progress { width: 220px; vertical-align: middle; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+  .tile { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+  .tile b { display: block; font-size: 1.5rem; line-height: 1.15; } .tile span { font-size: .8rem; color: var(--muted); font-weight: 600; }
+  .tile.vh b { color: var(--red); } .tile.hi b { color: #ea580c; }
+  ul { padding-left: 1.2em; margin: 6px 0 0; } li { margin: 4px 0; }
+  code { font-size: .88em; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/assets/brand/adtu-seal.png" alt="">
+    <h1>Merge and check similarity<small>FoCT Virtual Labs &middot; this page works only on the server PC</small></h1>
+    <a href="/__exam/control">&larr; Exam mode</a>
+  </header>
+
+  <div class="card">
+    <h2>1. The exam's submissions</h2>
+    <p class="muted">With several lab servers, press <b>Download submissions (.zip)</b> on each server's exam control page, bring the zips to this PC (a pen drive or a shared folder will do) and add them here. With one server, just check its exam.</p>
+    <label class="check" id="localRow" hidden><input type="checkbox" id="local" checked><span id="localText"></span></label>
+    <div class="drop" id="dropZip">Drop the submissions zips here, or <button class="plain sm" id="pickZip">choose files</button>
+      <input type="file" id="fileZip" accept=".zip" multiple hidden></div>
+    <table id="zips" hidden><thead><tr><th>Zip</th><th>Exam</th><th>Server</th><th>Students</th><th></th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <div class="card">
+    <h2>2. Files you gave the students <span class="muted">(optional)</span></h2>
+    <p class="muted">Starter code, the question's notebook or template. Code in them is left out of the check, like code that most of the class has.</p>
+    <div class="drop" id="dropBase">Drop files here, or <button class="plain sm" id="pickBase">choose files</button>
+      <input type="file" id="fileBase" multiple hidden></div>
+    <table id="bases" hidden><thead><tr><th>File</th><th>Size</th><th></th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <div class="card">
+    <h2>3. Merge and check</h2>
+    <label class="f" for="title">Title of the merged exam</label>
+    <input type="text" id="title" maxlength="120" placeholder="">
+    <label class="check"><input type="checkbox" id="check" checked><span><b>Check the students' work for similarity</b> <span class="muted">(each lab's code, notebooks, SQL, MongoDB, SPICE and documents; identical files)</span></span></label>
+    <div class="row muted">Leave out code that more than <input type="number" id="share" min="5" max="90" value="15"> % of the students have <span>(standard solutions and the lines everyone writes)</span></div>
+    <div class="row"><button class="go" id="run">Merge and check similarity</button><span id="state" class="muted"></span></div>
+  </div>
+
+  <div class="card" id="result" hidden></div>
+
+  <div class="card">
+    <h2>How the check works</h2>
+    <ul class="muted">
+      <li>Each program is compared with every other program of the same lab, as MOSS and JPlag do: names, numbers, texts, comments and spacing are set aside, so renaming variables or changing messages does not hide copying, and the longest shared stretches are found in any order, so moving functions around does not either.</li>
+      <li>Code you gave the students and code most of the class has does not count. The report shows what was left out.</li>
+      <li>For each pair the report says how much of each student's own code is in the other's work, shows the matching parts side by side in colour, and says <i>how</i> it matches: copied as it is, names changed, parts moved, identical comments, identical files. Each student's exam alerts are next to it.</li>
+      <li>Similarity is evidence, not proof: look at the matching parts and ask the students to explain. Record a decision on each pair; the CSV goes into your marks sheet.</li>
+      <li>Everything stays on this PC. Nothing is sent anywhere (MOSS, by contrast, needs the students' code sent to its server in the USA).</li>
+    </ul>
+    <h2 style="margin-top:14px">With several lab servers</h2>
+    <ul class="muted">
+      <li>Start the exam on every server with the same title, options and exam code.</li>
+      <li>If a server stops, its students open another server's address and sign in again. What they had sent stays on the first server; once it is back, download its zip too. Their newest copy of each file ends up in their folder, older copies in <i>Other copies</i>.</li>
+      <li>Work a student had not sent yet stays in that browser for the first server's address: a new address is a new start.</li>
+      <li>Keep the servers' clocks right: "newest" means newest by each server's clock.</li>
+    </ul>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ADMIN = { "Content-Type": "application/json", "X-FoCT-Admin": "1" };
+let job = "", files = { zip: [], base: [] }, exam = null, polling = null, titleTouched = false;
+
+async function loadExam() {
+  try {
+    const r = await fetch("/__exam/roster", { cache: "no-store" }).then((r) => r.json());
+    exam = r;
+    if (r.exam && r.exam.folder) {
+      $("localRow").hidden = false;
+      $("localText").innerHTML = `<b>This server's exam: ${esc(r.exam.title || r.exam.folder)}</b> <span class="muted">(${r.students.length} student${r.students.length === 1 ? "" : "s"}${r.exam.on ? ", still running" : ""})</span>`;
+    }
+  } catch { /* no exam here */ }
+  suggestTitle();
+}
+function suggestTitle() {
+  if (titleTouched) return;
+  const t = (files.zip.find((f) => f.title) || {}).title || ($("local").checked && exam && exam.exam && exam.exam.title) || "";
+  $("title").value = t;
+}
+$("title").addEventListener("input", () => { titleTouched = true; });
+$("local").addEventListener("change", suggestTitle);
+
+function upload(kind, file) {
+  const entry = { kind, name: file.name, size: file.size, progress: 0, error: "", done: false };
+  files[kind].push(entry);
+  draw();
+  return new Promise((resolve) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", "/__exam/merge/add");
+    x.setRequestHeader("X-FoCT-Admin", "1");
+    x.setRequestHeader("X-FoCT-Kind", kind);
+    x.setRequestHeader("X-FoCT-Job", job);
+    x.setRequestHeader("X-FoCT-Name", encodeURIComponent(file.name));
+    x.upload.onprogress = (e) => { if (e.lengthComputable) { entry.progress = e.loaded / e.total; draw(); } };
+    x.onload = () => {
+      let r = {};
+      try { r = JSON.parse(x.responseText); } catch { r = { error: x.statusText }; }
+      if (x.status === 200) { job = r.job; Object.assign(entry, r.file, { done: true }); suggestTitle(); }
+      else entry.error = r.error || "Upload failed.";
+      draw(); resolve();
+    };
+    x.onerror = () => { entry.error = "Upload failed."; draw(); resolve(); };
+    x.send(file);
+  });
+}
+async function addFiles(kind, list) {
+  for (const f of list) {
+    if (kind === "zip" && !/\.zip$/i.test(f.name)) { files.zip.push({ kind, name: f.name, error: "Not a zip file.", done: false }); draw(); continue; }
+    await upload(kind, f);       // one at a time: each new zip joins the same merge
+  }
+}
+async function removeFile(kind, n) {
+  const f = files[kind][n];
+  files[kind].splice(n, 1);
+  draw();
+  if (f.done && job) await fetch("/__exam/merge/remove", { method: "POST", headers: ADMIN, body: JSON.stringify({ job, kind, name: f.name }) });
+  suggestTitle();
+}
+function draw() {
+  const kb = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+  $("zips").hidden = !files.zip.length;
+  $("zips").querySelector("tbody").innerHTML = files.zip.map((f, n) => `<tr><td><b>${esc(f.name)}</b> <span class="muted">${f.size ? kb(f.size) : ""}</span></td>
+    <td>${f.error ? `<span class="err">${esc(f.error)}</span>` : f.done ? esc(f.title) + (f.merged ? ' <span class="muted">(merged before)</span>' : "") : `<progress value="${f.progress}"></progress>`}</td>
+    <td>${esc(f.server || "")}${f.address ? `<br><span class="muted">${esc(f.address)}</span>` : ""}</td><td>${f.students ?? ""}</td>
+    <td><button class="plain sm" data-k="zip" data-n="${n}">Remove</button></td></tr>`).join("");
+  $("bases").hidden = !files.base.length;
+  $("bases").querySelector("tbody").innerHTML = files.base.map((f, n) => `<tr><td><b>${esc(f.name)}</b>${f.error ? ` <span class="err">${esc(f.error)}</span>` : ""}</td>
+    <td>${f.done ? kb(f.size) : `<progress value="${f.progress || 0}"></progress>`}</td><td><button class="plain sm" data-k="base" data-n="${n}">Remove</button></td></tr>`).join("");
+  document.querySelectorAll("button[data-k]").forEach((b) => b.onclick = () => removeFile(b.dataset.k, +b.dataset.n));
+  const titles = [...new Set(files.zip.filter((f) => f.done).map((f) => f.title))];
+  if (titles.length > 1) $("state").innerHTML = `<span class="warn">The zips have different exam titles: ${titles.map(esc).join(", ")}. They are merged by enrolment number all the same.</span>`;
+}
+for (const [kind, drop, pick, input] of [["zip", "dropZip", "pickZip", "fileZip"], ["base", "dropBase", "pickBase", "fileBase"]]) {
+  $(pick).onclick = () => $(input).click();
+  $(input).onchange = (e) => { addFiles(kind, [...e.target.files]); e.target.value = ""; };
+  $(drop).addEventListener("dragover", (e) => { e.preventDefault(); $(drop).classList.add("over"); });
+  $(drop).addEventListener("dragleave", () => $(drop).classList.remove("over"));
+  $(drop).addEventListener("drop", (e) => { e.preventDefault(); $(drop).classList.remove("over"); addFiles(kind, [...e.dataTransfer.files]); });
+}
+
+$("run").onclick = async () => {
+  const local = !$("localRow").hidden && $("local").checked;
+  if (!local && !files.zip.some((f) => f.done)) { $("state").innerHTML = '<span class="err">Add at least one submissions zip, or check this server\'s exam.</span>'; return; }
+  if ([...files.zip, ...files.base].some((f) => !f.done && !f.error)) { $("state").textContent = "Wait until the files are uploaded."; return; }
+  $("run").disabled = true;
+  $("result").hidden = true;
+  $("state").textContent = "Starting…";
+  const r = await fetch("/__exam/merge/run", { method: "POST", headers: ADMIN,
+    body: JSON.stringify({ job, local, title: $("title").value.trim(), share: +$("share").value || 15, check: $("check").checked }) });
+  const d = await r.json().catch(() => ({ error: r.statusText }));
+  if (!r.ok) { $("state").innerHTML = `<span class="err">${esc(d.error || "Could not start.")}</span>`; $("run").disabled = false; return; }
+  job = d.job;
+  clearInterval(polling);
+  polling = setInterval(poll, 700);
+};
+async function poll() {
+  const s = await fetch("/__exam/merge/status?job=" + job, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+  if (!s) return;
+  if (s.state === "running") {
+    $("state").innerHTML = `${esc(s.step)}… ${s.total ? `<progress value="${s.done}" max="${s.total}"></progress> ${s.done} / ${s.total}` : ""}`;
+    return;
+  }
+  clearInterval(polling);
+  $("run").disabled = false;
+  if (s.state === "error") { $("state").innerHTML = `<span class="err">${esc(s.error)}</span>`; return; }
+  $("state").innerHTML = '<span class="ok">Done.</span>';
+  show(s.result);
+}
+function show(r) {
+  const p = r.pairs;
+  $("result").hidden = false;
+  $("result").innerHTML = `<h2>${esc(r.title)}</h2>
+    <p class="muted">${r.students} students from ${r.servers.length} source${r.servers.length === 1 ? "" : "s"} (${r.servers.map(esc).join(", ")})${r.both ? `; <b>${r.both}</b> worked on more than one server or PC: their newest copy of each file is in their folder, the others in <i>Other copies</i>` : ""}.</p>
+    ${p ? `<div class="tiles"><div class="tile vh"><b>${p.vhigh}</b><span>very high pairs</span></div><div class="tile hi"><b>${p.high}</b><span>high pairs</span></div>
+      <div class="tile"><b>${p.medium}</b><span>medium pairs</span></div><div class="tile"><b>${r.groups}</b><span>groups of 3 or more</span></div><div class="tile"><b>${r.identical}</b><span>identical files</span></div></div>` : ""}
+    <div class="row">${p ? `<a class="btn go" href="/__exam/merge/report?job=${job}" target="_blank" rel="noopener">Open the similarity report</a>
+      <a class="btn go" href="/__exam/merge/report?job=${job}#pdf" target="_blank" rel="noopener">Download the report as PDF</a>` : ""}
+      <a class="btn" href="/__exam/merge/zip?job=${job}">Download merged submissions (.zip)</a></div>
+    <p class="muted">Also on this PC: <code>${esc(r.folder)}</code>${p ? " (with similarity-report.html and the CSV files)" : ""}. The report works offline: copy it, or open it from the zip, on any PC.</p>`;
+}
+loadExam();
+</script>
+</body>
+</html>

@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Similarity · __REPORT_TITLE__</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: light dark; --bg: #f5f4fb; --card: #fff; --line: #e3e1f2; --text: #1d1b33; --muted: #6b6890; --navy: #342e6c;
+          --vh: #dc2626; --hi: #ea580c; --md: #a16207; --lo: #6b7280; --ok: #15803d; --code: #fbfaff; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15142a; --card: #1f1d3a; --line: #34325c; --text: #ecebf8; --muted: #a9a6cf;
+          --vh: #f87171; --hi: #fb923c; --md: #facc15; --lo: #9ca3af; --ok: #4ade80; --code: #191830; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  main { max-width: 1180px; margin: 24px auto; padding: 0 16px; }
+  h1 { font-size: 1.45rem; margin: 0; } h1 small { display: block; font-size: .85rem; color: var(--muted); font-weight: 500; }
+  h2 { font-size: 1.05rem; margin: 0 0 8px; } h3 { font-size: .95rem; margin: 14px 0 6px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin: 14px 0; box-shadow: 0 6px 24px rgba(30, 20, 90, .07); }
+  .muted { color: var(--muted); } .small { font-size: .86rem; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .tile { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .tile b { display: block; font-size: 1.6rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .tile span { font-size: .82rem; color: var(--muted); font-weight: 600; }
+  .tile.vh b { color: var(--vh); } .tile.hi b { color: var(--hi); } .tile.md b { color: var(--md); }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin-top: 18px; }
+  nav button { font: inherit; font-weight: 700; color: var(--muted); background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 12px; cursor: pointer; }
+  nav button.on { color: var(--text); border-bottom-color: var(--navy); }
+  @media (prefers-color-scheme: dark) { nav button.on { border-bottom-color: #a5b4fc; } }
+  .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
+  select, input[type=search], input[type=text], textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; }
+  label.chk { display: inline-flex; gap: 5px; align-items: center; font-size: .9rem; }
+  button.b { font: inherit; font-weight: 700; padding: 7px 13px; border-radius: 9px; border: 0; cursor: pointer; color: #fff; background: var(--navy); }
+  button.p { font: inherit; font-weight: 600; padding: 6px 12px; border-radius: 9px; border: 1px solid var(--line); cursor: pointer; color: var(--text); background: transparent; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; white-space: nowrap; }
+  tr.click { cursor: pointer; } tr.click:hover td { background: rgba(99, 102, 241, .07); }
+  .lv { display: inline-block; font-size: .76rem; font-weight: 800; padding: 1px 9px; border-radius: 99px; color: #fff; white-space: nowrap; }
+  .lv.vhigh { background: var(--vh); } .lv.high { background: var(--hi); } .lv.medium { background: var(--md); } .lv.low { background: var(--lo); }
+  @media (prefers-color-scheme: dark) { .lv.medium { color: #1d1b33; } }
+  .meter { display: inline-block; width: 70px; height: 8px; border-radius: 99px; background: var(--line); vertical-align: middle; margin-right: 6px; overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 99px; background: var(--navy); }
+  @media (prefers-color-scheme: dark) { .meter i { background: #a5b4fc; } }
+  .tag { display: inline-block; font-size: .74rem; font-weight: 700; padding: 0 7px; border-radius: 99px; border: 1px solid currentColor; margin: 1px 3px 1px 0; white-space: nowrap; }
+  .tag.bad { color: var(--vh); } .tag.warn { color: var(--hi); } .tag.info { color: var(--muted); }
+  .who b { display: block; } .who span { font-size: .8rem; color: var(--muted); }
+  .alerts { color: var(--hi); font-size: .82rem; }
+  .dec { font-size: .82rem; font-weight: 700; }
+  .dec.copied { color: var(--vh); } .dec.partly { color: var(--hi); } .dec.not { color: var(--ok); } .dec.ask { color: var(--md); }
+  pre.snip { background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 10px; overflow-x: auto; font-size: .82rem; max-height: 260px; }
+  ul.read { margin: 6px 0 0; padding-left: 1.2em; } ul.read li { margin: 4px 0; }
+  details > summary { cursor: pointer; font-weight: 700; }
+  /* the side-by-side view */
+  #detail { position: fixed; inset: 0; background: var(--bg); overflow: auto; z-index: 10; }
+  #detail .head { position: sticky; top: 0; z-index: 2; background: var(--card); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  #detail .head h2 { margin: 0; flex: 1; min-width: 260px; }
+  #detail .body { max-width: 1500px; margin: 0 auto; padding: 0 16px 30px; }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 760px) { .facts, .sides { grid-template-columns: 1fr !important; } }
+  .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .pane { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; }
+  .pane h3 { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: .9rem; }
+  .code { overflow: auto; max-height: 72vh; font: 13px/1.45 Consolas, "Cascadia Mono", Menlo, monospace; background: var(--code); }
+  .file { padding: 4px 10px; font: 600 .78rem "Segoe UI", Roboto, Arial, sans-serif; color: var(--muted); background: var(--card); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); position: sticky; left: 0; }
+  .ln { display: flex; white-space: pre; min-width: max-content; }
+  .ln .no { width: 3.6em; flex: none; text-align: right; padding-right: 10px; color: var(--muted); user-select: none; opacity: .7; }
+  .ln .tx { padding-right: 16px; }
+  .ln[data-b] { cursor: pointer; }
+  .ln .badge { display: inline-block; min-width: 1.7em; margin-left: 8px; font: 700 .7rem "Segoe UI", Roboto, Arial, sans-serif; text-align: center; border-radius: 99px; color: #fff; background: #4b5563; }
+  .c0 { background: rgba(239, 68, 68, .20); } .c1 { background: rgba(59, 130, 246, .22); } .c2 { background: rgba(34, 197, 94, .22); } .c3 { background: rgba(234, 179, 8, .26); }
+  .c4 { background: rgba(168, 85, 247, .22); } .c5 { background: rgba(20, 184, 166, .24); } .c6 { background: rgba(249, 115, 22, .24); } .c7 { background: rgba(236, 72, 153, .22); }
+  .flash { outline: 2px solid var(--navy); }
+  @media (prefers-color-scheme: dark) { .flash { outline-color: #a5b4fc; } }
+  .ev { font-size: .82rem; } .ev td { padding: 3px 6px; }
+  @media print {
+    body { background: #fff; color: #000; }
+    body.detail main { display: none; }
+    #detail { position: static; overflow: visible; }
+    #detail .head button, #detail .nav, .noprint { display: none !important; }
+    .sides { grid-template-columns: 1fr; }
+    .code { max-height: none; overflow: visible; }
+    .ln { white-space: pre-wrap; min-width: 0; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="title"></h1>
+  <div id="sources" class="muted small"></div>
+  <div class="card" id="read"></div>
+  <div class="tiles" id="tiles"></div>
+  <nav id="tabs"></nav>
+  <section id="view"></section>
+  <p class="muted small" id="foot"></p>
+</main>
+<div id="detail" hidden></div>
+<script type="application/json" id="data">__REPORT_DATA__</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("data").textContent);
+const S = D.students, P = D.pairs;
+const LV = { vhigh: "Very high", high: "High", medium: "Medium", low: "Low" };
+const LV_HINT = { vhigh: "almost the same work", high: "large parts are the same", medium: "some parts are the same", low: "small overlaps; usually no concern" };
+const DEC = { "": "—", not: "Not copied", ask: "Ask the students", partly: "Partly copied", copied: "Copied" };
+const DEC_RANK = { "": 0, not: 1, ask: 2, partly: 3, copied: 4 };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pct = (x) => Math.round(x * 100) + "%";
+const lab = (b) => (D.labs[b] || { name: b }).name;
+const $ = (id) => document.getElementById(id);
+const pairKey = (p) => `${p.bucket}|${S[p.a].key}|${S[p.b].key}`;
+const STORE = "foct.similarity." + D.id;
+let decisions = {};
+try { decisions = JSON.parse(localStorage.getItem(STORE) || "{}"); } catch { decisions = {}; }
+const save = () => { try { localStorage.setItem(STORE, JSON.stringify(decisions)); } catch { /* private window */ } };
+const decOf = (p) => (decisions[pairKey(p)] || {}).d || "";
+const lvTag = (l) => `<span class="lv ${l}">${LV[l]}</span>`;
+const meter = (x) => `<span class="meter"><i style="width:${Math.min(100, Math.round(x * 100))}%"></i></span>${pct(x)}`;
+
+function howTags(p) {
+  const t = [];
+  if (p.identical) t.push('<span class="tag bad">identical</span>');
+  else if (p.names != null && p.names >= 0.85 && (p.texts == null || p.texts >= 0.8)) t.push('<span class="tag bad">same names</span>');
+  else if (p.names != null && p.names <= 0.5) t.push('<span class="tag warn">names changed</span>');
+  if (p.moved) t.push('<span class="tag warn">moved</span>');
+  if (p.comments.length) t.push(`<span class="tag bad">${p.comments.length} same comment${p.comments.length > 1 ? "s" : ""}</span>`);
+  if (p.short) t.push('<span class="tag info">short</span>');
+  return t.join("");
+}
+const alertCount = (s) => S[s].alerts.length ? `<span class="alerts" title="${esc(S[s].alerts.join("\n"))}">⚠ ${esc(S[s].alerts.join("; ")).slice(0, 80)}</span>` : "";
+
+// ---------------------------------------------------------------- top of the page
+document.title = "Similarity · " + D.title;
+$("title").innerHTML = `Similarity report<small>${esc(D.title)} · made ${esc(new Date(D.created * 1000).toLocaleString())}</small>`;
+$("sources").innerHTML = "Merged from " + D.servers.map((s) => `<b>${esc(s.label)}</b>${s.address ? " (" + esc(s.address) + ")" : ""}: ${s.students} student${s.students === 1 ? "" : "s"}`).join(" · ")
+  + (D.titles.length > 1 ? ` · <span class="alerts">the zips had different exam titles: ${D.titles.map(esc).join(", ")}</span>` : "");
+const labsLeft = Object.values(D.labs);
+$("read").innerHTML = `<details ${localStorage.getItem("foct.similarity.read") ? "" : "open"} id="readBox"><summary>How to read this report</summary>
+<ul class="read">
+  <li>Each <b>pair</b> compares two students' work in one lab. <b>“A's code in B”</b> is how much of student A's own code is also in student B's work; for a student whose work is all in the other's, it is 100%.</li>
+  <li><b>Levels:</b> ${lvTag("vhigh")} 80% and more, ${LV_HINT.vhigh}; ${lvTag("high")} 60–79%, ${LV_HINT.high}; ${lvTag("medium")} 40–59%, ${LV_HINT.medium}; ${lvTag("low")} 25–39%, ${LV_HINT.low}.</li>
+  <li>Names of variables, numbers, texts, comments and spacing do not count for the percentage, so <b>renaming things does not hide copying</b>, and neither does moving parts around. The tags say what else matches: <span class="tag bad">same names</span> copied as it is, <span class="tag warn">names changed</span> disguised, <span class="tag warn">moved</span> parts in another order, <span class="tag bad">same comments</span> identical comments (strong evidence), <span class="tag info">short</span> little code of the student's own, where similar answers are common.</li>
+  <li><b>What does not count:</b> ${D.settings.base.length ? "code from the files you gave the students (" + D.settings.base.map(esc).join(", ") + "), and " : ""}standard code that many students have, unless it is part of a longer stretch that the two students alone share: a whole copied program still counts, a standard loop or textbook function on its own does not (see <i>Left out</i>).</li>
+  <li><b>Similarity is evidence, not proof.</b> Open a pair to see the matching parts side by side, check the exam alerts next to them, and ask the students to explain their work. The report cannot tell who copied from whom. Record your decision on each pair; <b>Download CSV</b> gives the list for the marks sheet.</li>
+</ul></details>`;
+$("readBox").addEventListener("toggle", (e) => { try { localStorage.setItem("foct.similarity.read", e.target.open ? "" : "1"); } catch {} });
+const count = (l) => P.filter((p) => p.level === l).length;
+$("tiles").innerHTML = [
+  [S.length, "students"], [count("vhigh"), "very high pairs", "vh"], [count("high"), "high pairs", "hi"], [count("medium"), "medium pairs", "md"],
+  [D.groups.length, "groups of 3 or more"], [D.identical.length, "identical files"]]
+  .map(([n, t, c]) => `<div class="tile ${c || ""}"><b>${n}</b><span>${t}</span></div>`).join("");
+$("foot").innerHTML = `FoCT Virtual Labs similarity check · each lab's code was compared with greedy string tiling over its tokens (as MOSS and JPlag do), matches of at least ${Object.values(D.labs).map((l) => l.name + " " + l.mml).join(", ")} tokens. Your decisions are kept in this browser only; download the CSV to keep them.`;
+
+// ---------------------------------------------------------------- tabs
+const TABS = [["pairs", "Pairs"], ["students", "Students"], ["groups", `Groups (${D.groups.length})`], ["identical", `Identical files (${D.identical.length})`], ["left", "Left out"]];
+let tab = "pairs";
+function tabs() {
+  $("tabs").innerHTML = TABS.map(([k, t]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${t}</button>`).join("")
+    + `<span style="flex:1"></span><button class="b noprint" id="pdfBtn" style="margin:4px">Download PDF</button><button class="p noprint" id="csv1" style="margin:4px">Download CSV: pairs</button><button class="p noprint" id="csv2" style="margin:4px">Download CSV: students</button>`;
+  $("tabs").querySelectorAll("[data-t]").forEach((b) => b.onclick = () => { tab = b.dataset.t; tabs(); view(); });
+  $("csv1").onclick = csvPairs; $("csv2").onclick = csvStudents; $("pdfBtn").onclick = downloadPdf;
+}
+function view() { ({ pairs: viewPairs, students: viewStudents, groups: viewGroups, identical: viewIdentical, left: viewLeft })[tab](); }
+
+// ---------------------------------------------------------------- pairs
+// With many Medium pairs (a class that wrote the same standard solutions) they would bury the clear cases.
+const MANY_MEDIUM = count("medium") > Math.max(20, Math.round(S.length / 3));
+const filt = { lab: "", levels: new Set(MANY_MEDIUM ? ["vhigh", "high"] : ["vhigh", "high", "medium"]), q: "" };
+function viewPairs() {
+  const labOpts = Object.keys(D.labs).map((b) => `<option value="${b}" ${filt.lab === b ? "selected" : ""}>${esc(lab(b))}</option>`).join("");
+  $("view").innerHTML = `<div class="bar noprint">
+    <select id="fLab"><option value="">All labs</option>${labOpts}</select>
+    ${Object.keys(LV).map((l) => `<label class="chk"><input type="checkbox" data-l="${l}" ${filt.levels.has(l) ? "checked" : ""}> ${LV[l]}</label>`).join("")}
+    <input type="search" id="fQ" placeholder="Name or enrolment no." value="${esc(filt.q)}">
+    ${MANY_MEDIUM && !filt.levels.has("medium") ? `<span class="muted small">${count("medium")} Medium pairs are not shown: so many usually means a standard solution. Tick Medium to see them.</span>` : ""}</div>
+    <div class="scroll"><table><thead><tr><th>Level</th><th>Similarity</th><th>Lab</th><th>Student A</th><th>Student B</th><th>A's code in B</th><th>B's code in A</th><th>Matching lines</th><th>How</th><th>Your decision</th></tr></thead>
+    <tbody id="rows"></tbody></table></div>`;
+  $("fLab").onchange = (e) => { filt.lab = e.target.value; rows(); };
+  $("fQ").oninput = (e) => { filt.q = e.target.value.trim().toLowerCase(); rows(); };
+  $("view").querySelectorAll("[data-l]").forEach((c) => c.onchange = () => { c.checked ? filt.levels.add(c.dataset.l) : filt.levels.delete(c.dataset.l); rows(); });
+  rows();
+}
+function shownPairs() {
+  return P.map((p, i) => [p, i]).filter(([p]) => (!filt.lab || p.bucket === filt.lab) && filt.levels.has(p.level)
+    && (!filt.q || [S[p.a], S[p.b]].some((s) => (s.name + " " + s.enrolment).toLowerCase().includes(filt.q))));
+}
+function rows() {
+  const list = shownPairs();
+  $("rows").innerHTML = list.length ? list.map(([p, i]) => `<tr class="click" data-i="${i}">
+      <td>${lvTag(p.level)}</td><td>${meter(p.score)}</td><td>${esc(lab(p.bucket))}</td>
+      <td class="who"><b>${esc(S[p.a].name)}</b><span>${esc(S[p.a].enrolment)}</span>${alertCount(p.a)}</td>
+      <td class="who"><b>${esc(S[p.b].name)}</b><span>${esc(S[p.b].enrolment)}</span>${alertCount(p.b)}</td>
+      <td>${pct(p.pa)}</td><td>${pct(p.pb)}</td><td>${p.lines_a} / ${p.lines_b}</td><td>${howTags(p)}</td>
+      <td class="dec ${decOf(p)}">${DEC[decOf(p)]}</td></tr>`).join("")
+    : `<tr><td colspan="10" class="muted">No pairs at these levels. ${P.length ? "Tick more levels above." : "No two students' work is similar enough to list."}</td></tr>`;
+  $("rows").querySelectorAll("tr[data-i]").forEach((tr) => tr.onclick = () => openPair(+tr.dataset.i, list.map(([, i]) => i)));
+}
+
+// ---------------------------------------------------------------- students
+function bestOf(s) {
+  let best = null;
+  for (const p of P) if ((p.a === s || p.b === s) && (!best || p.score > best.score)) best = p;
+  return best;
+}
+function viewStudents() {
+  const groupOf = {};
+  D.groups.forEach((g, n) => g.members.forEach((m) => { groupOf[m] = groupOf[m] || `Group ${n + 1}`; }));
+  const files = {};
+  D.identical.forEach((g) => g.files.forEach((f) => { files[f.student] = (files[f.student] || 0) + 1; }));
+  const rowsS = S.map((s, i) => {
+    const p = bestOf(i);
+    const worst = P.filter((q) => q.a === i || q.b === i).reduce((w, q) => DEC_RANK[decOf(q)] > DEC_RANK[w] ? decOf(q) : w, "");
+    return { s, i, p, worst, group: groupOf[i] || "", files: files[i] || 0 };
+  }).sort((x, y) => (y.p ? y.p.score : -1) - (x.p ? x.p.score : -1) || x.s.name.localeCompare(y.s.name));
+  $("view").innerHTML = `<p class="muted small">Each student's closest match. A student in a group shares work with two or more others. “Your decision” is the strongest decision you recorded on any of their pairs.</p>
+    <div class="scroll"><table><thead><tr><th>Student</th><th>Highest level</th><th>Similarity</th><th>With</th><th>Lab</th><th>Group</th><th>Identical files</th><th>Exam alerts</th><th>Servers</th><th>Your decision</th></tr></thead><tbody>
+    ${rowsS.map(({ s, i, p, worst, group, files: f }) => `<tr ${p ? `class="click" data-i="${P.indexOf(p)}"` : ""}>
+      <td class="who"><b>${esc(s.name)}</b><span>${esc(s.enrolment)}</span></td>
+      <td>${p ? lvTag(p.level) : '<span class="muted">—</span>'}</td><td>${p ? meter(p.score) : ""}</td>
+      <td>${p ? esc(S[p.a === i ? p.b : p.a].name) : ""}</td><td>${p ? esc(lab(p.bucket)) : esc(s.labs.map(lab).join(", "))}</td>
+      <td>${esc(group)}</td><td>${f || ""}</td><td class="alerts">${esc(s.alerts.join("; "))}</td><td class="small">${esc(s.servers.join(", "))}</td>
+      <td class="dec ${worst}">${DEC[worst]}</td></tr>`).join("")}</tbody></table></div>`;
+  $("view").querySelectorAll("tr[data-i]").forEach((tr) => tr.onclick = () => openPair(+tr.dataset.i));
+}
+
+// ---------------------------------------------------------------- groups, identical files, left out
+function viewGroups() {
+  $("view").innerHTML = D.groups.length ? D.groups.map((g, n) => {
+    const inside = P.map((p, i) => [p, i]).filter(([p]) => p.bucket === g.bucket && g.members.includes(p.a) && g.members.includes(p.b) && (p.level === "vhigh" || p.level === "high"));
+    return `<div class="card"><h2>Group ${n + 1}: ${g.members.length} students, ${esc(lab(g.bucket))}</h2>
+      <p class="muted small">These students' work is linked by pairs at High or Very high (strongest ${pct(g.score)}). Often one solution passed from student to student.</p>
+      <p>${g.members.map((m) => `<b>${esc(S[m].name)}</b> <span class="muted small">${esc(S[m].enrolment)}</span>`).join(" · ")}</p>
+      <table><tbody>${inside.map(([p, i]) => `<tr class="click" data-i="${i}"><td>${lvTag(p.level)}</td><td>${meter(p.score)}</td><td>${esc(S[p.a].name)} ↔ ${esc(S[p.b].name)}</td><td>${howTags(p)}</td><td class="dec ${decOf(p)}">${DEC[decOf(p)]}</td></tr>`).join("")}</tbody></table></div>`;
+  }).join("") : `<p class="muted">No group of three or more students shares work at High or Very high.</p>`;
+  $("view").querySelectorAll("tr[data-i]").forEach((tr) => tr.onclick = () => openPair(+tr.dataset.i));
+}
+function viewIdentical() {
+  $("view").innerHTML = D.identical.length ? `<p class="muted small">The very same file, byte for byte (code: line endings and trailing spaces aside), in the folders of two or more students. For Word, Excel and PowerPoint files this means the file itself was passed on: two students never produce the same document file on their own. Files that many students have (blank documents, examples) are not listed.</p>
+    <div class="scroll"><table><thead><tr><th>File</th><th>Size</th><th>Students</th></tr></thead><tbody>
+    ${D.identical.map((g) => `<tr><td><b>${esc(g.name)}</b></td><td>${(g.size / 1024).toFixed(1)} KB</td><td>${g.files.map((f) => `${esc(S[f.student].name)} <span class="muted small">(${esc(S[f.student].enrolment)}) ${esc(f.path)}</span>`).join("<br>")}</td></tr>`).join("")}
+    </tbody></table></div>` : `<p class="muted">No identical files between students.</p>`;
+}
+function viewLeft() {
+  const labs = Object.entries(D.labs);
+  $("view").innerHTML = `<p class="muted small">Code that says nothing about copying does not count towards similarity.</p>
+    ${D.settings.base.length ? `<div class="card"><h2>Files you gave the students</h2><p>${D.settings.base.map(esc).join(", ")}: code from them never counts.</p></div>` : ""}
+    <div class="card"><h2>Standard code that many students have</h2>
+    <p class="muted small">A stretch of code that more students have than shown below is standard: a textbook function, the usual loop, the question's data. It counts only where it is part of a longer stretch that two students alone share, as in a whole copied program.</p>
+    <table><thead><tr><th>Lab</th><th>Students</th><th>Standard code is code that more than</th><th>Given code</th><th>Standard code</th></tr></thead><tbody>
+    ${labs.map(([b, l]) => `<tr><td>${esc(l.name)}</td><td>${l.students}</td><td>${l.most} of them have</td><td>${pct(l.given)}</td><td>${pct(l.standard)}</td></tr>`).join("")}
+    </tbody></table>
+    ${D.commons.length ? `<h3>The most widely shared code</h3>${D.commons.map((c) => `<p class="small"><b>${esc(lab(c.bucket))}</b>: in the work of ${c.students} of ${c.of} students</p><pre class="snip">${esc(c.text)}</pre>`).join("")}` : ""}
+    <p class="muted small">If a large block here was neither taught nor given in the question, many students may have passed one solution around. Look at their work, too.</p></div>`;
+}
+
+// ---------------------------------------------------------------- one pair, side by side
+let current = null, order = null;
+function openPair(i, list) {
+  if (list) order = list;
+  if (!order || !order.includes(i)) order = P.map((_, n) => n);
+  current = i;
+  const p = P[i], A = S[p.a], B = S[p.b], da = D.docs[p.da], db = D.docs[p.db];
+  const dec = decisions[pairKey(p)] || { d: "", n: "" };
+  const pos = order.indexOf(i);
+  const fact = (s, own, inOther, lines) => `<div class="card" style="margin:0"><div class="who"><b>${esc(s.name)}</b><span>${esc(s.enrolment)} · ${esc(s.servers.join(", "))}${s.pcs.length ? " · PC " + esc(s.pcs.join(", ")) : ""}</span></div>
+    <p style="margin:6px 0 0"><b>${pct(inOther)}</b> of this student's own code is in the other's work (${lines} matching line${lines === 1 ? "" : "s"}; ${own} tokens of own code).</p>
+    ${s.alerts.length ? `<p class="alerts" style="margin:6px 0 0">Exam alerts: ${esc(s.alerts.join("; "))}</p>` : '<p class="muted small" style="margin:6px 0 0">No exam alerts.</p>'}
+    ${s.incidents.length ? `<details class="small"><summary>Exam events (${s.incidents.length})</summary><table class="ev"><tbody>${s.incidents.map((e) => `<tr><td class="muted">${esc(e.time.slice(11) || e.time)}</td><td>${esc(e.event)}</td><td class="muted">${esc(e.detail)}${e.secs ? " (" + esc(e.secs) + " s)" : ""}</td></tr>`).join("")}</tbody></table></details>` : ""}</div>`;
+  $("detail").innerHTML = `<div class="head">
+      <h2>${lvTag(p.level)} ${esc(A.name)} ↔ ${esc(B.name)} <span class="muted small">· ${esc(lab(p.bucket))} · ${pct(p.score)}</span></h2>
+      <span class="nav"><button class="p" id="prev" ${pos <= 0 ? "disabled" : ""}>‹ Previous</button> <button class="p" id="next" ${pos >= order.length - 1 ? "disabled" : ""}>Next ›</button></span>
+      <button class="p" id="print">Print</button><button class="b" id="close">Close</button></div>
+    <div class="body">
+      <div class="card"><h2>How the work matches</h2><ul class="read">${p.how.map((h) => `<li>${esc(h)}</li>`).join("")}
+        ${p.short ? "<li>One of the two has little code of its own: similar short answers are common, so this weighs less.</li>" : ""}</ul>
+        ${p.comments.length ? `<h3>Identical comments</h3><ul class="read">${p.comments.map((c) => `<li><code>${esc(c)}</code></li>`).join("")}</ul>` : ""}
+        <div class="bar noprint" style="margin-bottom:0"><b>Your decision:</b>
+          <select id="dec">${Object.entries(DEC).map(([k, t]) => `<option value="${k}" ${dec.d === k ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <input type="text" id="note" placeholder="Note (e.g. both explained their code; marks)" value="${esc(dec.n)}" style="flex:1;min-width:220px"></div></div>
+      <div class="facts">${fact(A, p.own_a, p.pa, p.lines_a)}${fact(B, p.own_b, p.pb, p.lines_b)}</div>
+      <p class="muted small noprint">Matching parts have the same colour and number on both sides. Click one to find it on the other side.</p>
+      <div class="sides"><div class="pane"><h3>${esc(A.name)}</h3><div class="code" id="paneA">${pane(da, p.blocks, 0)}</div></div>
+        <div class="pane"><h3>${esc(B.name)}</h3><div class="code" id="paneB">${pane(db, p.blocks, 3)}</div></div></div>
+    </div>`;
+  $("detail").hidden = false;
+  document.body.classList.add("detail");
+  $("close").onclick = closePair;
+  $("print").onclick = () => window.print();
+  $("prev").onclick = () => openPair(order[pos - 1]);
+  $("next").onclick = () => openPair(order[pos + 1]);
+  const store = () => { decisions[pairKey(p)] = { d: $("dec").value, n: $("note").value }; save(); };
+  $("dec").onchange = store; $("note").oninput = store;
+  for (const [mine, other] of [["paneA", "paneB"], ["paneB", "paneA"]]) {
+    $(mine).onclick = (e) => {
+      const ln = e.target.closest(".ln[data-b]");
+      if (!ln) return;
+      const t = $(other).querySelector(`.ln[data-b="${ln.dataset.b}"]`);
+      if (t) { t.scrollIntoView({ block: "center" }); t.classList.add("flash"); setTimeout(() => t.classList.remove("flash"), 1200); }
+    };
+  }
+  $("detail").scrollTop = 0;
+  const first = $("paneA").querySelector(".ln[data-b]");
+  if (first) $("paneA").scrollTop = Math.max(0, first.offsetTop - 40);
+  const firstB = $("paneB").querySelector(".ln[data-b]");
+  if (firstB) $("paneB").scrollTop = Math.max(0, firstB.offsetTop - 40);
+}
+function pane(doc, blocks, off) {
+  // off 0: this side's file and lines are blocks[0..2]; off 3: blocks[3..5]
+  const mark = {}, start = {};
+  blocks.forEach((b, n) => {
+    for (let l = b[off + 1]; l <= b[off + 2]; l++) { const k = b[off] + ":" + l; if (!(k in mark)) mark[k] = n; }
+    const k0 = b[off] + ":" + b[off + 1];
+    if (!(k0 in start)) start[k0] = n;
+  });
+  return doc.files.map((f, fi) => `<div class="file">${esc(f.path)}</div>` + f.text.split("\n").map((t, li) => {
+    const k = fi + ":" + (li + 1), b = mark[k];
+    return b === undefined ? `<div class="ln"><span class="no">${li + 1}</span><span class="tx">${esc(t) || " "}</span></div>`
+      : `<div class="ln c${b % 8}" data-b="${b}"><span class="no">${li + 1}</span><span class="tx">${esc(t) || " "}${k in start ? `<span class="badge">${start[k] + 1}</span>` : ""}</span></div>`;
+  }).join("")).join("");
+}
+function closePair() {
+  $("detail").hidden = true;
+  document.body.classList.remove("detail");
+  current = null;
+  view();
+}
+document.addEventListener("keydown", (e) => {
+  if (current === null || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if (e.key === "Escape") closePair();
+  const pos = order.indexOf(current);
+  if (e.key === "ArrowRight" && pos < order.length - 1) openPair(order[pos + 1]);
+  if (e.key === "ArrowLeft" && pos > 0) openPair(order[pos - 1]);
+});
+
+// ---------------------------------------------------------------- CSV for the marks sheet
+function download(name, rows) {
+  const text = "﻿" + rows.map((r) => r.map((c) => { const s = String(c ?? ""); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const safeTitle = D.title.replace(/[<>:"/\\|?*]+/g, "-");
+function csvPairs() {
+  download(`${safeTitle} - similarity pairs.csv`, [["Level", "Similarity", "Lab", "Student A", "Enrolment A", "Student B", "Enrolment B", "A's code in B", "B's code in A", "Lines A", "Lines B", "How", "Short program", "Decision", "Note"],
+    ...P.map((p) => { const d = decisions[pairKey(p)] || {};
+      return [LV[p.level], pct(p.score), lab(p.bucket), S[p.a].name, S[p.a].enrolment, S[p.b].name, S[p.b].enrolment, pct(p.pa), pct(p.pb), p.lines_a, p.lines_b, p.how.join(" "), p.short ? "yes" : "", DEC[d.d || ""].replace("—", ""), d.n || ""]; })]);
+}
+function csvStudents() {
+  download(`${safeTitle} - similarity by student.csv`, [["Name", "Enrolment no.", "Highest level", "Highest similarity", "With", "Lab", "Decision", "Notes", "Exam alerts", "Servers"],
+    ...S.map((s, i) => { const p = bestOf(i), mine = P.filter((q) => q.a === i || q.b === i);
+      const worst = mine.reduce((w, q) => DEC_RANK[decOf(q)] > DEC_RANK[w] ? decOf(q) : w, "");
+      const notes = mine.map((q) => (decisions[pairKey(q)] || {}).n).filter(Boolean).join(" | ");
+      return [s.name, s.enrolment, p ? LV[p.level] : "", p ? pct(p.score) : "", p ? S[p.a === i ? p.b : p.a].name : "", p ? lab(p.bucket) : "", DEC[worst].replace("—", ""), notes, s.alerts.join("; "), s.servers.join(", ")]; })]);
+}
+
+// ---------------------------------------------------------------- PDF: A4, made in this page (no library, works offline)
+// Standard PDF fonts: Helvetica (F1), Helvetica-Bold (F2), Courier (F3), with the Windows-1252 character set.
+const PW = 595.28, PH = 841.89, PM = 42;
+const HELV = [278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,
+  667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,
+  556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
+const HELVB = [278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,
+  722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,
+  556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584];
+const CP1252 = { 0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x02C6: 0x88, 0x2030: 0x89,
+  0x0160: 0x8A, 0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E, 0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96,
+  0x2014: 0x97, 0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C, 0x017E: 0x9E, 0x0178: 0x9F };
+const PDF_SUB = { "↔": "<->", "→": "->", "←": "<-", "≤": "<=", "≥": ">=", "≠": "!=", "−": "-", "⚠": "!", " ": " " };
+const INK = [0.11, 0.106, 0.2], MUTED = [0.42, 0.41, 0.56], NAVY = [0.204, 0.18, 0.424], RULE = [0.86, 0.85, 0.93], HEADBG = [0.955, 0.95, 0.985];
+const LVCOL = { vhigh: [0.863, 0.149, 0.149], high: [0.918, 0.345, 0.047], medium: [0.631, 0.384, 0.027], low: [0.42, 0.447, 0.502] };
+const PARTCOL = [[0.99, 0.85, 0.85], [0.84, 0.89, 0.99], [0.84, 0.96, 0.88], [0.99, 0.95, 0.8], [0.93, 0.86, 0.99], [0.82, 0.95, 0.93], [0.99, 0.89, 0.82], [0.99, 0.86, 0.93]];
+function cp(s) {                                  // text -> Windows-1252 bytes (other characters become "?")
+  const out = [];
+  for (const ch of String(s ?? "")) {
+    if (PDF_SUB[ch] !== undefined) { for (const c of PDF_SUB[ch]) out.push(c.charCodeAt(0)); continue; }
+    const c = ch.codePointAt(0);
+    if (c === 9) out.push(32, 32, 32, 32);
+    else if ((c >= 32 && c < 127) || (c >= 160 && c <= 255)) out.push(c);
+    else if (CP1252[c]) out.push(CP1252[c]);
+    else if (!(c >= 0x300 && c < 0x370) && c >= 32) out.push(63);
+  }
+  return out;
+}
+function glyphW(b, font) {
+  if (font === "F3") return 600;
+  if (b >= 32 && b <= 126) return (font === "F2" ? HELVB : HELV)[b - 32];
+  return b === 0x95 ? 350 : b === 0x97 || b === 0x85 ? 1000 : b >= 0x91 && b <= 0x94 ? 333 : 556;
+}
+class PdfDoc {
+  constructor(title) { this.title = title; this.pages = []; this.newPage(); }
+  newPage() { this.ops = []; this.pages.push(this.ops); this.y = PM; }
+  room(h) { if (this.y + h > PH - PM - 14) { this.newPage(); return true; } return false; }
+  width(s, font, size) { return cp(s).reduce((t, b) => t + glyphW(b, font), 0) * size / 1000; }
+  lit(s) { return "(" + cp(s).map((b) => b === 40 || b === 41 || b === 92 ? "\\" + String.fromCharCode(b) : b > 126 ? "\\" + b.toString(8).padStart(3, "0") : String.fromCharCode(b)).join("") + ")"; }
+  rgb(c) { return c.map((v) => v.toFixed(3)).join(" "); }
+  text(x, y, s, font = "F1", size = 9.5, color = INK) { this.ops.push(`BT /${font} ${size} Tf ${this.rgb(color)} rg ${x.toFixed(2)} ${(PH - y).toFixed(2)} Td ${this.lit(s)} Tj ET`); }
+  rect(x, y, w, h, color) { this.ops.push(`${this.rgb(color)} rg ${x.toFixed(2)} ${(PH - y - h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`); }
+  rule(y, color = RULE, lw = 0.5) { this.ops.push(`${this.rgb(color)} RG ${lw} w ${PM} ${(PH - y).toFixed(2)} m ${(PW - PM).toFixed(2)} ${(PH - y).toFixed(2)} l S`); }
+  wrap(s, font, size, maxw) {                     // word wrap; a word longer than the line is cut
+    const out = [];
+    for (const para of String(s ?? "").split("\n")) {
+      let line = "";
+      for (let word of para.split(/ +/)) {
+        while (this.width(word, font, size) > maxw && word.length > 1) {
+          let cut = word.length - 1;
+          while (cut > 1 && this.width(word.slice(0, cut), font, size) > maxw) cut--;
+          if (line) { out.push(line); line = ""; }
+          out.push(word.slice(0, cut));
+          word = word.slice(cut);
+        }
+        const next = line ? line + " " + word : word;
+        if (this.width(next, font, size) <= maxw) line = next;
+        else { out.push(line); line = word; }
+      }
+      out.push(line);
+    }
+    return out;
+  }
+  para(s, { font = "F1", size = 9.5, color = INK, x = PM, width = PW - 2 * PM, after = 4 } = {}) {
+    const lead = size * 1.35;
+    for (const line of this.wrap(s, font, size, width)) {
+      this.room(lead);
+      this.text(x, this.y + size, line, font, size, color);
+      this.y += lead;
+    }
+    this.y += after;
+  }
+  bullet(s, { size = 9.5, color = INK } = {}) {
+    const lead = size * 1.35;
+    this.wrap(s, "F1", size, PW - 2 * PM - 12).forEach((line, i) => {
+      this.room(lead);
+      if (i === 0) this.text(PM + 2, this.y + size, "•", "F1", size, MUTED);
+      this.text(PM + 12, this.y + size, line, "F1", size, color);
+      this.y += lead;
+    });
+    this.y += 2;
+  }
+  heading(s, size = 13, keep = 60) {
+    this.room(size * 2.2 + keep);
+    this.y += size * 0.7;
+    this.text(PM, this.y + size, s, "F2", size, NAVY);
+    this.y += size * 1.45;
+  }
+  badge(x, y, s, color, size = 8) {               // a coloured label; returns its width
+    const w = this.width(s, "F2", size) + 8;
+    this.rect(x, y, w, size + 4, color);
+    this.text(x + 4, y + size + 0.6, s, "F2", size, [1, 1, 1]);
+    return w;
+  }
+  table(cols, rows, { size = 8 } = {}) {
+    // cols: [{ t: title, w: relative width }]; a cell is text or { t, font, color, badge: colour }
+    const total = PW - 2 * PM, pad = 3, lead = size * 1.3, sum = cols.reduce((s, c) => s + c.w, 0);
+    const widths = cols.map((c) => c.w * total / sum);
+    const fit = (s, font, start, room, least) => {   // the largest size (not above start) at which s fits
+      let sz = start;
+      while (sz > least && this.width(s, font, sz) > room) sz -= 0.25;
+      return sz;
+    };
+    // headings: never cut inside a word; a narrow column gets a smaller heading instead
+    const heads = cols.map((c, k) => {
+      const longest = c.t.split(/ +/).reduce((a, w) => this.width(w, "F2", size) > this.width(a, "F2", size) ? w : a, "");
+      const sz = fit(longest, "F2", size, widths[k] - 2 * pad, 5.5);
+      return { sz, lines: this.wrap(c.t, "F2", sz, widths[k] - 2 * pad) };
+    });
+    const head = () => {
+      const h = Math.max(...heads.map((hd) => hd.lines.length * hd.sz * 1.3)) + 2 * pad;
+      this.room(h + 2 * lead + 2 * pad);
+      this.rect(PM, this.y, total, h, HEADBG);
+      let x = PM;
+      heads.forEach((hd, k) => { hd.lines.forEach((ln, n) => this.text(x + pad, this.y + pad + hd.sz + n * hd.sz * 1.3, ln, "F2", hd.sz, MUTED)); x += widths[k]; });
+      this.y += h;
+    };
+    head();
+    for (const row of rows) {
+      const cells = row.map((v, k) => { const c = v && typeof v === "object" ? v : { t: v ?? "" };
+        const room = widths[k] - 2 * pad, font = c.font || "F1";
+        if (c.badge) return Object.assign({}, c, { lines: [c.t], sz: fit(c.t, "F2", size - 0.5, room - 8, 5) });
+        // a word that does not fit (an enrolment number, a file name) makes its cell a little smaller first
+        const longest = String(c.t).split(/[ \n]+/).reduce((a, w) => this.width(w, font, size) > this.width(a, font, size) ? w : a, "");
+        const sz = fit(longest, font, size, room, Math.min(size, 6.2));
+        return Object.assign({}, c, { sz, lines: this.wrap(c.t, font, sz, room) }); });
+      const h = Math.max(...cells.map((c) => c.badge ? lead : c.lines.length * c.sz * 1.3)) + 2 * pad;
+      if (this.room(h)) head();
+      let x = PM;
+      cells.forEach((c, k) => {
+        if (c.badge) this.badge(x + pad, this.y + pad - 1, c.lines[0], c.badge, c.sz);
+        else c.lines.forEach((ln, n) => this.text(x + pad, this.y + pad + c.sz + n * c.sz * 1.3, ln, c.font || "F1", c.sz, c.color || INK));
+        x += widths[k];
+      });
+      this.y += h;
+      this.rule(this.y, RULE, 0.4);
+    }
+    this.y += 8;
+  }
+  code(label, text, from, to, colour, maxLines = 45) {
+    const size = 7.2, lead = size * 1.32, numW = 24, per = Math.floor((PW - 2 * PM - numW - 8) / (size * 0.6));
+    const lines = String(text).split("\n");
+    this.room(lead * 4);
+    this.text(PM, this.y + 8, label, "F2", 8, MUTED);
+    this.y += 11;
+    let shown = 0;
+    for (let n = from; n <= Math.min(to, lines.length); n++) {
+      if (shown === maxLines) { this.para(`... ${Math.min(to, lines.length) - n + 1} more lines`, { size: 7.5, color: MUTED }); break; }
+      const t = lines[n - 1].replace(/\t/g, "    ");
+      for (let i = 0, k = 0; i < Math.max(1, t.length); i += per, k++) {
+        this.room(lead);
+        this.rect(PM, this.y, PW - 2 * PM, lead, colour);
+        if (k === 0) this.text(PM + 2, this.y + size, String(n).padStart(4), "F3", size, MUTED);
+        this.text(PM + numW + 4, this.y + size, t.slice(i, i + per), "F3", size, INK);
+        this.y += lead;
+      }
+      shown++;
+    }
+    this.y += 5;
+  }
+  async bytes() {
+    const n = this.pages.length, enc = new TextEncoder(), foot = 7.5;
+    this.pages.forEach((ops, i) => {
+      const right = `Page ${i + 1} of ${n}`;
+      let left = "FoCT Virtual Labs · Similarity report · " + this.title;
+      while (left.length > 20 && this.width(left, "F1", foot) > PW - 2 * PM - this.width(right, "F1", foot) - 20) left = left.slice(0, -2) + "…";
+      ops.push(`${this.rgb(RULE)} RG 0.5 w ${PM} 34 m ${(PW - PM).toFixed(2)} 34 l S`);
+      ops.push(`BT /F1 ${foot} Tf ${this.rgb(MUTED)} rg ${PM} 24 Td ${this.lit(left)} Tj ET`);
+      ops.push(`BT /F1 ${foot} Tf ${this.rgb(MUTED)} rg ${(PW - PM - this.width(right, "F1", foot)).toFixed(2)} 24 Td ${this.lit(right)} Tj ET`);
+    });
+    const deflate = async (data) => {             // smaller files where the browser can compress
+      if (!window.CompressionStream) return null;
+      try { return new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new CompressionStream("deflate"))).arrayBuffer()); }
+      catch { return null; }
+    };
+    const chunks = [], offsets = [];
+    let pos = 0;
+    const put = (x) => { const b = typeof x === "string" ? enc.encode(x) : x; chunks.push(b); pos += b.length; };
+    const obj = (num, body) => { offsets[num] = pos; put(`${num} 0 obj\n`); for (const b of [].concat(body)) put(b); put("\nendobj\n"); };
+    put(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, 0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a]));   // %PDF-1.4 and a binary line
+    const kids = this.pages.map((_, i) => `${7 + 2 * i} 0 R`).join(" ");
+    obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
+    obj(2, `<< /Type /Pages /Kids [${kids}] /Count ${n} >>`);
+    obj(3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+    obj(4, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+    obj(5, "<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>");
+    const d = new Date(), p2 = (v) => String(v).padStart(2, "0");
+    obj(6, `<< /Title ${this.lit("Similarity report - " + this.title)} /Producer (FoCT Virtual Labs) /CreationDate (D:${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}) >>`);
+    for (let i = 0; i < n; i++) {
+      obj(7 + 2 * i, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents ${8 + 2 * i} 0 R >>`);
+      const raw = enc.encode(this.pages[i].join("\n"));
+      const z = await deflate(raw);
+      obj(8 + 2 * i, [`<< /Length ${(z || raw).length}${z ? " /Filter /FlateDecode" : ""} >>\nstream\n`, z || raw, "\nendstream"]);
+    }
+    const size = 7 + 2 * n, xref = pos;
+    put(`xref\n0 ${size}\n0000000000 65535 f \n`);
+    for (let k = 1; k < size; k++) put(`${String(offsets[k]).padStart(10, "0")} 00000 n \n`);
+    put(`trailer\n<< /Size ${size} /Root 1 0 R /Info 6 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+    return new Blob(chunks, { type: "application/pdf" });
+  }
+}
+const howText = (p) => [p.identical ? "identical" : p.names != null && p.names >= 0.85 && (p.texts == null || p.texts >= 0.8) ? "same names"
+  : p.names != null && p.names <= 0.5 ? "names changed" : "", p.moved ? "moved" : "", p.comments.length ? `${p.comments.length} same comment${p.comments.length > 1 ? "s" : ""}` : "",
+  p.short ? "short" : ""].filter(Boolean).join(", ");
+function studentRows() {                          // one row per student, most similar first (as in Students)
+  const groupOf = {}, files = {};
+  D.groups.forEach((g, n) => g.members.forEach((m) => { groupOf[m] = groupOf[m] || `Group ${n + 1}`; }));
+  D.identical.forEach((g) => g.files.forEach((f) => { files[f.student] = (files[f.student] || 0) + 1; }));
+  return S.map((s, i) => {
+    const p = bestOf(i);
+    const worst = P.filter((q) => q.a === i || q.b === i).reduce((w, q) => DEC_RANK[decOf(q)] > DEC_RANK[w] ? decOf(q) : w, "");
+    return { s, i, p, worst, group: groupOf[i] || "", files: files[i] || 0 };
+  }).sort((x, y) => (y.p ? y.p.score : -1) - (x.p ? x.p.score : -1) || x.s.name.localeCompare(y.s.name));
+}
+async function downloadPdf() {
+  const btn = $("pdfBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Making the PDF…"; }
+  try {
+    const doc = new PdfDoc(D.title);
+    doc.text(PM, doc.y + 20, "Similarity report", "F2", 21, NAVY);
+    doc.y += 30;
+    doc.para(D.title, { font: "F2", size: 13, after: 2 });
+    doc.para(`Checked ${new Date(D.created * 1000).toLocaleString()}; this PDF ${new Date().toLocaleString()}.`, { size: 8.5, color: MUTED, after: 1 });
+    doc.para("Merged from " + D.servers.map((s) => `${s.label}${s.address ? " (" + s.address + ")" : ""}: ${s.students} student${s.students === 1 ? "" : "s"}`).join("; ") + ".", { size: 8.5, color: MUTED, after: 10 });
+    doc.table([{ t: "Students", w: 1 }, { t: "Very high pairs", w: 1 }, { t: "High pairs", w: 1 }, { t: "Medium pairs", w: 1 }, { t: "Groups of 3 or more", w: 1.2 }, { t: "Identical files", w: 1 }],
+      [[{ t: String(S.length), font: "F2" }, { t: String(count("vhigh")), font: "F2", color: LVCOL.vhigh }, { t: String(count("high")), font: "F2", color: LVCOL.high },
+        { t: String(count("medium")), font: "F2", color: LVCOL.medium }, { t: String(D.groups.length), font: "F2" }, { t: String(D.identical.length), font: "F2" }]], { size: 10 });
+    doc.heading("How to read this report", 12, 40);
+    [`Each pair compares two students' work in one lab. "A's code in B" is how much of student A's own code is also in student B's work.`,
+     "Levels: Very high 80% and more, almost the same work; High 60-79%, large parts are the same; Medium 40-59%, some parts are the same; Low 25-39%, small overlaps, usually no concern.",
+     "Names of variables, numbers, texts, comments and spacing do not count for the percentage, so renaming things does not hide copying, and neither does moving parts around.",
+     (D.settings.base.length ? `Code from the files given to the students (${D.settings.base.join(", ")}) does not count, nor does ` : "Standard code that many students have does not count, nor does ")
+       + (D.settings.base.length ? "standard code that many students have, " : "") + "unless it is part of a longer stretch the two students alone share.",
+     "Similarity is evidence, not proof: the report cannot tell who copied from whom. Look at the matching parts and ask the students to explain their work."]
+      .forEach((t) => doc.bullet(t, { size: 9 }));
+
+    doc.heading("Students", 13);
+    doc.table([{ t: "Student", w: 2.3 }, { t: "Highest", w: 1.3 }, { t: "Similarity", w: 0.95 }, { t: "With", w: 1.8 }, { t: "Lab", w: 1.3 }, { t: "Group", w: 0.8 },
+               { t: "Identical files", w: 0.85 }, { t: "Exam alerts", w: 2 }, { t: "Decision", w: 1.1 }],
+      studentRows().map(({ s, i, p, worst, group, files }) => [`${s.name}\n${s.enrolment}`, p ? { t: LV[p.level], badge: LVCOL[p.level] } : "-",
+        p ? pct(p.score) : "", p ? S[p.a === i ? p.b : p.a].name : "", p ? lab(p.bucket) : s.labs.map(lab).join(", "), group, files ? String(files) : "",
+        { t: s.alerts.join("; "), color: LVCOL.high }, { t: worst ? DEC[worst] : "", font: "F2" }]), { size: 7.8 });
+
+    const listed = shownPairs().map(([p]) => p);
+    doc.heading(`Pairs (${listed.length}: ${[...filt.levels].map((l) => LV[l]).join(", ")}${filt.lab ? ", " + lab(filt.lab) : ""})`, 13);
+    if (listed.length) {
+      doc.table([{ t: "Level", w: 1.3 }, { t: "Similarity", w: 0.85 }, { t: "Lab", w: 1.15 }, { t: "Student A", w: 2.2 }, { t: "Student B", w: 2.2 }, { t: "A's code in B", w: 0.8 },
+                 { t: "B's code in A", w: 0.8 }, { t: "Lines", w: 0.7 }, { t: "How", w: 1.45 }, { t: "Decision", w: 1.45 }],
+        listed.map((p) => { const d = decisions[pairKey(p)] || {};
+          return [{ t: LV[p.level], badge: LVCOL[p.level] }, pct(p.score), lab(p.bucket), `${S[p.a].name}\n${S[p.a].enrolment}`, `${S[p.b].name}\n${S[p.b].enrolment}`,
+                  pct(p.pa), pct(p.pb), `${p.lines_a} / ${p.lines_b}`, howText(p), { t: (d.d ? DEC[d.d] : "") + (d.n ? (d.d ? ": " : "") + d.n : ""), font: d.d ? "F2" : "F1" }]; }), { size: 7.6 });
+    } else doc.para("No pairs at these levels.", { color: MUTED });
+
+    if (D.groups.length) {
+      doc.heading("Groups of three or more", 13);
+      D.groups.forEach((g, n) => doc.bullet(`Group ${n + 1} (${lab(g.bucket)}, strongest ${pct(g.score)}): ` + g.members.map((m) => `${S[m].name} (${S[m].enrolment})`).join(", "), { size: 9 }));
+    }
+    if (D.identical.length) {
+      doc.heading("Identical files", 13);
+      doc.table([{ t: "File", w: 1.5 }, { t: "Size", w: 0.6 }, { t: "Students", w: 4 }],
+        D.identical.map((g) => [{ t: g.name, font: "F2" }, `${(g.size / 1024).toFixed(1)} KB`, g.files.map((f) => `${S[f.student].name} (${S[f.student].enrolment}): ${f.path}`).join("\n")]), { size: 7.8 });
+    }
+    doc.heading("What does not count", 13);
+    if (D.settings.base.length) doc.para(`Files given to the students: ${D.settings.base.join(", ")}. Code from them never counts.`, { size: 9 });
+    doc.table([{ t: "Lab", w: 1.4 }, { t: "Students", w: 0.8 }, { t: "Standard code is code that more than", w: 1.8 }, { t: "Given code", w: 0.9 }, { t: "Standard code", w: 0.9 }],
+      Object.values(D.labs).map((l) => [l.name, String(l.students), `${l.most} of them have`, pct(l.given), pct(l.standard)]), { size: 8 });
+
+    // the matching work: every Very high and High pair, and every pair with a decision
+    const detail = P.filter((p) => p.level === "vhigh" || p.level === "high" || decOf(p));
+    if (detail.length) {
+      doc.newPage();
+      doc.heading("The matching work, pair by pair", 15, 0);
+      doc.para("Each matching part is shown for both students, with its line numbers, in the same colour.", { size: 8.5, color: MUTED, after: 6 });
+    }
+    detail.forEach((p, n) => {
+      const A = S[p.a], B = S[p.b], da = D.docs[p.da], db = D.docs[p.db], dec = decisions[pairKey(p)] || {};
+      doc.heading(`${n + 1}. ${A.name} and ${B.name} · ${lab(p.bucket)}`, 11.5, 90);
+      const w = doc.badge(PM, doc.y - 2, `${LV[p.level]} · ${pct(p.score)}`, LVCOL[p.level], 8.5);
+      doc.text(PM + w + 8, doc.y + 8, `${A.enrolment} and ${B.enrolment}`, "F1", 8.5, MUTED);
+      doc.y += 16;
+      doc.para(`${pct(p.pa)} of ${A.name}'s own code is in ${B.name}'s work (${p.lines_a} matching line${p.lines_a === 1 ? "" : "s"}); ${pct(p.pb)} of ${B.name}'s own code is in ${A.name}'s work (${p.lines_b} line${p.lines_b === 1 ? "" : "s"}).`, { size: 9 });
+      p.how.forEach((h) => doc.bullet(h, { size: 9 }));
+      if (p.short) doc.bullet("One of the two has little code of its own: similar short answers are common, so this weighs less.", { size: 9 });
+      if (p.comments.length) doc.para("Identical comments: " + p.comments.map((c) => `"${c}"`).join("; "), { size: 8.5 });
+      for (const s of [A, B]) {
+        const ev = s.incidents.filter((e) => e.event).map((e) => `${(e.time || "").slice(11) || e.time} ${e.event}${e.detail ? " (" + e.detail + ")" : ""}`);
+        doc.para(`${s.name} · ${s.servers.join(", ")}${s.pcs.length ? " · PC " + s.pcs.join(", ") : ""}: ${s.alerts.length ? "exam alerts " + s.alerts.join("; ") : "no exam alerts"}${ev.length ? ". Events: " + ev.slice(0, 8).join("; ") + (ev.length > 8 ? " ..." : "") : ""}.`,
+          { size: 8.5, color: s.alerts.length ? LVCOL.high : MUTED, after: 2 });
+      }
+      doc.para(`Decision: ${dec.d ? DEC[dec.d] : "not recorded yet"}${dec.n ? " - " + dec.n : ""}`, { font: "F2", size: 9, after: 6 });
+      p.blocks.forEach((b, k) => {
+        const [fa, la1, la2, fb, lb1, lb2] = b, colour = PARTCOL[k % 8];
+        doc.code(`Part ${k + 1} · ${A.name} · ${da.files[fa].path}, lines ${la1}-${la2}`, da.files[fa].text, la1, la2, colour);
+        doc.code(`Part ${k + 1} · ${B.name} · ${db.files[fb].path}, lines ${lb1}-${lb2}`, db.files[fb].text, lb1, lb2, colour);
+      });
+      doc.y += 6;
+    });
+    const blob = await doc.bytes();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${safeTitle} - similarity report.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Download PDF"; }
+  }
+}
+
+tabs();
+view();
+if (location.hash === "#pdf") {                   // the merge page's "Download the report as PDF"
+  history.replaceState(null, "", location.pathname + location.search);
+  downloadPdf();
+}
+</script>
+</body>
+</html>

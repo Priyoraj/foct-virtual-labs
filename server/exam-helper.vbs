@@ -10,7 +10,9 @@
 '     and Chrome, blocks USB drives, and cuts the PC off from the internet while the lab network
 '     keeps working (if the PC restarts, the internet is back at once);
 '   - tells the lab server every few seconds what it sees (USB drives, a second screen, programs
-'     it had to close). The lab server lets this PC take part in the exam only while it runs.
+'     it had to close). The lab server lets this PC take part in the exam only while it runs;
+'   - if the lab has several servers and this one stops answering, moves the exam to the next one
+'     (the student signs in there again; what was sent before stays on the first server).
 ' It needs no administrator rights, and everything it changes it puts back: when the teacher ends
 ' the exam, or at the next sign-in if the PC restarts first. To put the PC back by hand, run it
 ' with /restore.
@@ -19,13 +21,16 @@
 '   exam-helper.vbs /restore   put this PC back to normal
 '   exam-helper.vbs /test      try it out: talks to the server but changes nothing on this PC
 '
-' The lab server fills in its address below when the file is downloaded from it.
+' The lab server fills in its address below when the file is downloaded from it, and the lab's
+' other servers after it.
 Option Explicit
 
 Const SERVER = "__FOCT_SERVER__"
-Const VERSION = "2"
+Const SERVER_LIST = "__FOCT_SERVERS__"
+Const VERSION = "3"
 Const APPNAME = "FoCT exam helper"
 Const BEAT_MS = 3000
+Const MOVE_AFTER_S = 30                                   ' seconds without an answer before moving to another server
 Const SYSTEM_MODAL = 4096
 
 Dim sh, fso, wmi, testMode, restoreMode, machineMode, elevatedArg, i
@@ -67,6 +72,13 @@ Const NEVER = ",explorer.exe,dwm.exe,csrss.exe,winlogon.exe,lsass.exe,services.e
 
 Dim token, kiosk, title, killList, optTaskmgr, optAdmin, optInternet, myPid, elevated, edgeExe
 Dim tmOff, devOff, usbBlocked, netOff, netBlocking, routesOk, problem, killedNow, relaunched, screens, lastScreens, ready, beats
+' labServer: the lab server this PC takes the exam on now; labServers: every one known, this first.
+' cameFrom: the server it moved away from; routeIf/routeGw: the way to the lab's other subnets.
+Dim labServer, labServers, cameFrom, moves, routeIf, routeGw
+labServer = SERVER
+labServers = ""
+AddServers SERVER
+If InStr(SERVER_LIST, "__FOCT") = 0 Then AddServers SERVER_LIST
 
 EnsureDir HOME
 Log "---- start " & Join(ArgList(), " ") & " (version " & VERSION & ")"
@@ -86,6 +98,10 @@ WScript.Quit 0
 ' ============================================================================ main
 Sub Main()
   Dim resp
+  If InStr(SERVER, "__FOCT") > 0 Then                     ' not downloaded from a lab server: no address in it
+    Say "This copy of the exam helper does not know the lab server. Download it from the lab server's exam page.", vbExclamation
+    Exit Sub
+  End If
   myPid = OwnPid()
   If elevatedArg Then
     WriteText HOME & "\elevated.started", "1"              ' tells the first copy that this one carries on
@@ -104,9 +120,9 @@ Sub Main()
     Exit Sub
   End If
 
-  resp = Hello()
+  resp = Connect(False)                                    ' this lab server, or else one of the others
   If resp = "" Then
-    Say "The lab server (" & SERVER & ") cannot be reached. Check the network and try again.", vbExclamation
+    Say "The lab server (" & Replace(labServers, " ", ", ") & ") cannot be reached. Check the network and try again.", vbExclamation
     Exit Sub
   End If
   If Not JBool(resp, "ok") Then
@@ -149,13 +165,84 @@ Sub ReadSettings(resp)
   optTaskmgr = JBool(resp, "taskmgr")
   optAdmin = JBool(resp, "admin")
   optInternet = JBool(resp, "internet")
+  AddServers JStr(resp, "servers")
   If testMode Then WriteText HOME & "\token.txt", token
 End Sub
 
-Function Hello()
-  Hello = Http("POST", SERVER & "/__exam/agent/hello", "{""pc"":""" & JEsc(sh.ExpandEnvironmentStrings("%COMPUTERNAME%")) & _
-          """,""user"":""" & JEsc(sh.ExpandEnvironmentStrings("%USERNAME%")) & """,""version"":""" & VERSION & """}")
+Function Hello(url)
+  Hello = Http("POST", url & "/__exam/agent/hello", "{""pc"":""" & JEsc(sh.ExpandEnvironmentStrings("%COMPUTERNAME%")) & _
+          """,""user"":""" & JEsc(sh.ExpandEnvironmentStrings("%USERNAME%")) & """,""version"":""" & VERSION & _
+          """,""from"":""" & JEsc(cameFrom) & """}")
 End Function
+
+Function Connect(skipCurrent)
+  ' Says hello to the lab servers in turn (the current one first, unless skipCurrent) until one runs
+  ' an exam with the helper, and makes that one the current server. Returns its answer; if none
+  ' runs one, the first answer that came (it says why); "" if no server answered at all.
+  Dim s, r, order, firstNo
+  order = labServer
+  For Each s In Split(labServers, " ")
+    If LCase(s) <> LCase(labServer) Then order = order & " " & s
+  Next
+  firstNo = ""
+  For Each s In Split(order, " ")
+    If s <> "" And Not (skipCurrent And LCase(s) = LCase(labServer)) Then
+      r = Hello(s)
+      If r <> "" Then
+        If JBool(r, "ok") Then
+          labServer = s
+          Connect = r
+          Exit Function
+        End If
+        If firstNo = "" Then firstNo = r
+      End If
+    End If
+  Next
+  Connect = firstNo
+End Function
+
+Function MoveServer()
+  ' The lab server stopped answering: carry on with another one that runs the exam. The exam window
+  ' opens there with that server's key; the student signs in again.
+  Dim old, r
+  MoveServer = False
+  old = labServer
+  cameFrom = old
+  r = Connect(True)
+  If r = "" Then Exit Function
+  If Not JBool(r, "ok") Then Exit Function
+  moves = moves + 1
+  Log "lab server " & old & " stopped answering: moving to " & labServer
+  ReadSettings r
+  If netBlocking Then KeepLabRoutes
+  CloseBrowser
+  WScript.Sleep 1500
+  StartBrowser
+  MoveServer = True
+End Function
+
+Sub AddServers(text)
+  ' adds lab server addresses (separated by spaces or commas) to the known ones, in order
+  Dim s
+  For Each s In Split(Replace(Trim(text & ""), ",", " "), " ")
+    s = Trim(s)
+    If Right(s, 1) = "/" Then s = Left(s, Len(s) - 1)
+    If LCase(Left(s, 7)) = "http://" Or LCase(Left(s, 8)) = "https://" Then
+      If InStr(" " & LCase(labServers) & " ", " " & LCase(s) & " ") = 0 Then labServers = Trim(labServers & " " & s)
+    End If
+  Next
+End Sub
+
+Sub LearnServers(text)
+  ' a server named another one: it must stay reachable too when the internet is cut off
+  Dim before
+  before = labServers
+  AddServers text
+  If labServers <> before Then
+    Log "lab servers now: " & labServers
+    If netBlocking Then KeepLabRoutes
+  End If
+End Sub
 
 ' ============================================================================ lock down / run / put back
 Sub Lockdown()
@@ -201,8 +288,9 @@ Sub Lockdown()
 End Sub
 
 Sub RunExam()
-  Dim resp, lastContact
-  lastContact = Now
+  Dim resp, lastContact, lastTry
+  lastContact = Now                                       ' the last answer from any lab server
+  lastTry = Now                                           ' ... or the last attempt to move to another one
   screens = ScreenCount()
   Do
     killedNow = ""
@@ -215,23 +303,33 @@ Sub RunExam()
     If netBlocking Then NetKeepOff
     beats = beats + 1
     If beats Mod 10 = 0 Then screens = ScreenCount()
-    resp = Http("POST", SERVER & "/__exam/agent/beat", BeatJson())
+    resp = Http("POST", labServer & "/__exam/agent/beat", BeatJson())
     If resp <> "" Then
       lastContact = Now
+      lastTry = Now
       If Not JBool(resp, "known") Then                    ' the server forgot this PC (restarted): introduce it again
         Dim r2
-        r2 = Hello()
+        r2 = Hello(labServer)
         If JBool(r2, "ok") Then ReadSettings r2
       Else
         killList = "," & Replace(LCase(JStr(resp, "kill")), " ", "") & ","
+        LearnServers JStr(resp, "servers")
       End If
       If JBool(resp, "end") Then
         Log "the exam has ended"
         Exit Do
       End If
-    ElseIf DateDiff("n", lastContact, Now) >= 30 Then
-      Log "no contact with the lab server for 30 minutes: putting the PC back"
-      Exit Do
+    Else
+      ' This server does not answer. With others in the lab, move to one that runs the exam
+      ' (tried again every MOVE_AFTER_S seconds while none does).
+      If InStr(labServers, " ") > 0 And DateDiff("s", lastTry, Now) >= MOVE_AFTER_S Then
+        lastTry = Now
+        If MoveServer() Then lastContact = Now
+      End If
+      If DateDiff("n", lastContact, Now) >= 30 Then
+        Log "no contact with any lab server for 30 minutes: putting the PC back"
+        Exit Do
+      End If
     End If
     WScript.Sleep BEAT_MS
   Loop
@@ -259,7 +357,7 @@ Sub RestoreMachine()
 End Sub
 
 Sub Bye(reason)
-  If token <> "" Then Http "POST", SERVER & "/__exam/agent/bye", "{""token"":""" & JEsc(token) & """,""reason"":""" & JEsc(reason) & """}"
+  If token <> "" Then Http "POST", labServer & "/__exam/agent/bye", "{""token"":""" & JEsc(token) & """,""reason"":""" & JEsc(reason) & """}"
 End Sub
 
 Function BeatJson()
@@ -293,14 +391,19 @@ Function HostOf(url)
 End Function
 
 Sub StartBrowser()
-  Dim cmd
-  ' Only the lab server is reachable: everything else goes to a proxy address where nothing answers.
-  cmd = """" & edgeExe & """ --kiosk """ & SERVER & "/?foctk=" & kiosk & """ --edge-kiosk-type=fullscreen" & _
+  Dim cmd, url, bypass, s
+  ' Only the lab servers are reachable: everything else goes to a proxy address where nothing answers.
+  url = labServer & "/?foctk=" & kiosk
+  bypass = ""
+  For Each s In Split(labServers, " ")
+    If s <> "" Then bypass = bypass & HostOf(s) & ";"
+  Next
+  cmd = """" & edgeExe & """ --kiosk """ & url & """ --edge-kiosk-type=fullscreen" & _
         " --no-first-run --no-default-browser-check --user-data-dir=""" & PROFILE & """" & _
-        " --proxy-server=""127.0.0.1:9"" --proxy-bypass-list=""" & HostOf(SERVER) & ";<local>"""
+        " --proxy-server=""127.0.0.1:9"" --proxy-bypass-list=""" & bypass & "<local>"""
   If testMode Then
     Log "test mode, would start: " & cmd
-    WriteText HOME & "\kiosk-url.txt", SERVER & "/?foctk=" & kiosk
+    WriteText HOME & "\kiosk-url.txt", url
   Else
     sh.Run cmd, 1, False
     WScript.Sleep 2500
@@ -433,7 +536,7 @@ Sub NetBlock()
   ' The lab server must still answer. If it does not, give the internet back rather than lose the exam.
   answered = False
   For tries = 1 To 3
-    If Http("POST", SERVER & "/__exam/agent/beat", BeatJson()) <> "" Then
+    If Http("POST", labServer & "/__exam/agent/beat", BeatJson()) <> "" Then
       answered = True
       Exit For
     End If
@@ -502,15 +605,25 @@ Sub NetRestore()
 End Sub
 
 Sub KeepLabRoutes()
-  ' The lab server, and the DNS servers when the server goes by name, must stay reachable without a
-  ' default route: those on another subnet get a route through the gateway the PC uses now.
-  Dim host, list, a, best, ifx, gw
-  host = HostOf(SERVER)
-  If IsIPv4(host) Then list = host Else list = Resolve(host) & " " & DnsServers()
+  ' The lab servers, and the DNS servers when a server goes by name, must stay reachable without a
+  ' default route: those on another subnet get a route through the gateway the PC used before.
+  ' (Run again when another server becomes known: the gateway is remembered from the first time.)
+  Dim host, list, a, best, ifx, gw, s
+  list = ""
+  For Each s In Split(labServers, " ")
+    If s <> "" Then
+      host = HostOf(s)
+      If IsIPv4(host) Then list = list & " " & host Else list = list & " " & Resolve(host) & " " & DnsServers()
+    End If
+  Next
   best = BestIPv4Default()                                ' interface|gateway
-  If best = "" Then Exit Sub
-  ifx = Split(best, "|")(0)
-  gw = Split(best, "|")(1)
+  If best <> "" Then
+    routeIf = Split(best, "|")(0)
+    routeGw = Split(best, "|")(1)
+  End If
+  If routeIf & "" = "" Then Exit Sub
+  ifx = routeIf
+  gw = routeGw
   For Each a In Split(Trim(list), " ")
     If IsIPv4(a) And Left(a, 4) <> "127." Then
       If Not OnLink(a) And InStr(ReadText(ROUTES), "|" & a & "/32|") = 0 Then
