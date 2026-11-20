@@ -66,6 +66,10 @@
   const currentLock = () => serverLock || localLock;
   const serverNow = () => Date.now() + skew;
 
+  const UA = navigator.userAgent || "";
+  const IS_FIREFOX = /Firefox\//.test(UA);
+  const IS_CHROMIUM = /(Chrome|Chromium|Edg)\//.test(UA) && !IS_FIREFOX;     // Edge, Chrome (and other Chromium browsers)
+  const browserOk = () => !(S().opts && S().opts.chromium_only) || IS_CHROMIUM;
   const CODE_LABS = ["c", "cpp", "java", "python", "lex"];
   function labOf(pathname, search) {
     if (pathname.startsWith("/apps/code/")) {
@@ -122,7 +126,7 @@
     }
     if (!isTop) return;
     if (state.on && state.timeup && !wasUp) toast("Time is up.");
-    if (state.on && state.register && !me && !state.timeup && labAllowed(PAGE_LAB) && helperOk()) signIn();
+    if (state.on && state.register && !me && !state.timeup && labAllowed(PAGE_LAB) && helperOk() && browserOk()) signIn();
     else closeSignIn();
     if (collecting()) {
       const k = `foct.exam.collected.${state.id}`;
@@ -210,6 +214,16 @@
   const OPEN_MSG = "Opening files is turned off during the exam. Use Submit files to hand in a file.";
   const blockOpen = () => active() && opts().block_open;
   const blockKeys = () => active() && opts().block_keys;
+  // Firefox has more developer-tools keys: Ctrl+Shift+K (console), +E (network), +M (responsive view),
+  // +Z (debugger), Shift+F5/F7/F9. Inside an editor the Ctrl+Shift ones belong to the editor (Monaco
+  // deletes a line with Ctrl+Shift+K; editors redo with Ctrl+Shift+Z), so they are left to it there;
+  // if the developer tools open anyway, the self-check below still catches them.
+  const editable = (t) => !!(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || "")
+    || (t.closest && t.closest(".monaco-editor, .cm-editor, .CodeMirror, #area_id, .xterm"))));
+  function firefoxTools(e, k, ctrl) {
+    if (ctrl && e.shiftKey && ["k", "e", "m", "z"].includes(k)) return !editable(e.target);
+    return e.shiftKey && !ctrl && !e.altKey && ["F5", "F7", "F9"].includes(e.key);
+  }
   const inputClick = HTMLInputElement.prototype.click;
   function ourInputClick(...args) {
     if (this.type === "file" && !this.__foctSubmit && blockOpen()) { countBlocked("open"); toast(OPEN_MSG); return undefined; }
@@ -242,7 +256,8 @@
     if (!blockKeys()) return;
     const k = (e.key || "").toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
     const devtools = e.key === "F12" || (ctrl && e.shiftKey && ["i", "j", "c"].includes(k))
-      || (e.metaKey && e.altKey && ["i", "j", "c", "u"].includes(k)) || (e.ctrlKey && !e.shiftKey && !e.altKey && k === "u");
+      || (e.metaKey && e.altKey && ["i", "j", "c", "u"].includes(k)) || (e.ctrlKey && !e.shiftKey && !e.altKey && k === "u")
+      || (IS_FIREFOX && firefoxTools(e, k, ctrl));
     const print = ctrl && !e.shiftKey && k === "p";
     if (!devtools && !print) return;
     e.preventDefault();
@@ -651,6 +666,10 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
     if (state.timeup) {
       return { kind: "timeup", title: "Time is up",
                text: me ? "Your work has been sent to your teacher. You can stop now." : "The time for this exam is over." };
+    }
+    if (!browserOk()) {
+      return { kind: "browser", title: "Use Microsoft Edge or Google Chrome",
+               text: "This exam needs Microsoft Edge or Google Chrome, which support every exam safeguard. Open the lab address in one of them." };
     }
     if (state.opts && state.opts.helper) {
       if (!agent.ok) {

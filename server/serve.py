@@ -249,7 +249,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send_simple(404, "Not found", head=head, page=True)
         if not self.is_loopback():                    # the server PC itself is never held back
             page = MIME.get(target.suffix.lower(), "").startswith("text/html") and self.wants_page()
-            denied = EXAM.gate(self.cookie(ST_COOKIE), path, url.query, page, self.client_address[0])
+            denied = EXAM.gate(self.cookie(ST_COOKIE), path, url.query, page, self.client_address[0],
+                               self.headers.get("User-Agent", ""))
             if denied:
                 if page:
                     return self.send_not_in_exam(head)
@@ -547,7 +548,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             data = self.read_json()
             token, rec = EXAM.register(data.get("exam"), data.get("name"), data.get("enrolment"), data.get("code"),
-                                       self.client_address[0], data.get("kiosk", ""))
+                                       self.client_address[0], data.get("kiosk", ""), self.headers.get("User-Agent", ""))
         except PermissionError as e:
             return self.refuse(409, str(e))
         except (ValueError, TypeError) as e:

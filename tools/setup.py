@@ -604,6 +604,45 @@ def patch_office(dest):
              "if(t&&(loadcallback=t),e){e=Object.assign({},e,window.FOCT_L10N||{});for(var i in l10n=e)"),
         ])
         sub(main / "index.html", [("</head>", '<script src="locale-en.js"></script>\n</head>')])
+        # Firefox has no window.chrome: a check for the "360" browser crashed the editors there.
+        sub(main / "app.js", [("(chrome.account360?", "(window.chrome&&chrome.account360?")], required=False)
+        # This build reports every opened document to 360's server (the editor, file type, load times,
+        # memory use and a random browser ID kept in localStorage; not the contents or file names).
+        # Students' documents must not be reported anywhere: the beacon is switched off, and the two
+        # values it needs no longer break the page (no crypto.subtle on plain-HTTP pages, no
+        # performance.memory in Firefox).
+        sub(main / "app.js", [
+            ('basePath:"https://dd.browser.360.cn/static/a/"', 'basePath:""'),
+            ('e=this.basePath+t+"?"+jQuery.param(i);(new Image).src=e}', 'e=this.basePath+t+"?"+jQuery.param(i);void e}'),
+            ('t=await crypto.subtle.digest("SHA-1",t)', 't=crypto.subtle?await crypto.subtle.digest("SHA-1",t):t'),
+            ("performance.memory.usedJSHeapSize", "(performance.memory||{usedJSHeapSize:0}).usedJSHeapSize"),
+        ], required=False)
+    sub(dest / "web-apps" / "apps" / "presentationeditor" / "main" / "app.reporter.js",
+        [(";chrome.runtime&&chrome.runtime.onMessage?", ";window.chrome&&chrome.runtime&&chrome.runtime.onMessage?")],
+        required=False)
+    # Fonts missing locally (DengXian, Symbol, Wingdings: not redistributable) were fetched from
+    # 360's server, and the extension build loads SmartArt from there too: both now stay on the lab
+    # server. The font loader tells its second try by the address, so the second address must be
+    # recognisable; it does not exist, and after three tries the editor uses a substitute font, as
+    # it always did on an offline lab network.
+    for js in (dest / "sdkjs").rglob("sdk-all*.js"):
+        sub(js, [('"https://bangong.360.cn/office/fonts/"', '"/apps/office/fonts-fallback/"'),
+                 ('.includes("bangong.360.cn")', '.includes("/fonts-fallback/")'),
+                 ('"https://bangong.360.cn/office/SmartArts/"', '"/apps/office/sdkjs/common/SmartArts/"')], required=False)
+    for js in (dest / "sdkjs").glob("*/sdk-all.js"):
+        s = js.read_text(encoding="utf-8")
+        # The editors measure each character with the browser's canvas at a 3686.4 px font size.
+        # Firefox measures canvas text at no more than 2000 px, so there every word came out about
+        # half as wide and text was drawn squeezed together. Measuring at half the size and
+        # doubling gives exactly the same numbers in Edge and Chrome, and the right ones in Firefox.
+        s, n = re.subn(r"\$\{3686\.4\}px(.{0,600}?)Math\.round\(10\*", r"${1843.2}px\1Math.round(20*", s, flags=re.S)
+        # This build turns the theme font Calibri into 等线 (DengXian, the Chinese Office default)
+        # and gives its built-in heading styles 等线 too. Windows outside China has no DengXian, so
+        # new spreadsheets and slides showed SimSun. Calibri now stays Calibri.
+        deng = s.count('"\\u7b49\\u7ebf')
+        s = s.replace('"\\u7b49\\u7ebf Light"', '"Calibri Light"').replace('"\\u7b49\\u7ebf"', '"Calibri"')
+        js.write_text(s, encoding="utf-8")
+        log(f"  {js.parent.name}: text measuring fixed for Firefox in {n} places, {deng} DengXian defaults made Calibri")
     seal = ('t.innerHTML=\'<img src="/assets/brand/adtu-seal.png" alt="FoCT Virtual Labs" '
             'style="width:34px;height:34px;border-radius:50%;background:#fff">\','
             't.style.background="none",t.style.cursor="pointer",t.title="Back to FoCT Virtual Labs",'
@@ -624,7 +663,7 @@ def patch_office(dest):
             ('"无法加载编辑器组件。请确保已正确安装 OnlyOffice API。"',
              '"The office editor could not be loaded. Please refresh the page."'),
             ('"文档加载完成："', '"Document loaded: "'),
-            # 2. New files: open our blank templates (Calibri, A4/16:9) instead of the built-in Chinese ones.
+            # 2. New files: open our blank templates (Calibri; A4 documents, 16:9 slides) instead of the built-in Chinese ones.
             ("if(e){const n=Z2[`.${r}`];if(!n)throw new Error(`不支持的文件类型：${r}`);o={bin:n}}",
              'if(e){const n=await(await fetch("/apps/office/templates/blank."+r)).blob();o=await K2(new File([n],i))}'),
         ])
@@ -636,7 +675,7 @@ def patch_office(dest):
 
 def setup_office():
     dest = WEB / "apps" / "office"
-    version = "ranuts-document-gh-pages-2025-10-23+openfonts+en3"
+    version = "ranuts-document-gh-pages-2025-10-23+openfonts+en3+ff2+notrack2+calibri+a4"
     if is_done(dest, version):
         return log("  already installed")
     arc = download(OFFICE_ZIP, "ranuts-document-gh-pages.zip")

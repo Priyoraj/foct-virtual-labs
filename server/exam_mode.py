@@ -74,6 +74,7 @@ OPTS = {"block_open": True,      # opening files from the PC / pen drive, and th
         "leave": "log",          # leaving the exam window: "log", "warn" or "lock" (after leave_limit times)
         "leave_limit": 3,
         "fullscreen": False,     # the exam runs full screen
+        "chromium_only": False,  # only Chromium browsers (Edge, Chrome) can take the exam: they support every safeguard
         "helper": False,         # students must run the exam helper (exam-helper.vbs) on their Windows PC
         "helper_taskmgr": True,  # ... which turns off Task Manager and the clipboard history during the exam
         "helper_admin": True,    # ... and, with administrator rights: developer tools off, USB drives blocked
@@ -158,6 +159,15 @@ def labs_for(path, query, page):
         if path.startswith(prefix):
             return labs
     return None
+
+
+def chromium_browser(user_agent):
+    """Edge, Chrome and the other Chromium browsers (by what the browser says it is)."""
+    ua = str(user_agent or "")
+    return bool(re.search(r"(Chrome|Chromium|Edg)/", ua)) and "Firefox/" not in ua
+
+
+BROWSER_MSG = "This exam needs Microsoft Edge or Google Chrome. Open the lab address in one of them."
 
 
 def duration(secs):
@@ -273,7 +283,8 @@ class ExamMode:
         o["unlock"] = "teacher" if o["unlock"] == "teacher" else "auto"
         o["leave"] = o["leave"] if o["leave"] in ("log", "warn", "lock") else "log"
         o["leave_limit"] = max(1, min(20, int(o["leave_limit"] or 3)))
-        for k in ("block_open", "block_keys", "tamper_lock", "fullscreen", "helper", "helper_taskmgr", "helper_admin"):
+        for k in ("block_open", "block_keys", "tamper_lock", "fullscreen", "chromium_only", "helper", "helper_taskmgr",
+                  "helper_admin"):
             o[k] = bool(o[k])
         o["helper_usb"] = "note" if o["helper_usb"] == "note" else "pause"
         o["helper_kill"] = ", ".join(dict.fromkeys(m.group(0).lower() for m in EXE_RE.finditer(str(o["helper_kill"] or ""))))
@@ -365,7 +376,7 @@ class ExamMode:
             return {"asked": len(active), "answered": sum(1 for r in active if r.get("done", 0) >= n)}
 
     # ------------------------------------------------------------ students
-    def register(self, exam_id, name, enrolment, code, ip, kiosk=""):
+    def register(self, exam_id, name, enrolment, code, ip, kiosk="", user_agent=""):
         name, enrolment = clean_student(name, enrolment)
         with self.lock:
             s = self.state
@@ -375,6 +386,8 @@ class ExamMode:
                 raise PermissionError("The time for this exam is over.")
             if not ip_allowed(ip, self._ranges):
                 raise PermissionError("This PC is not one of the exam PCs. Ask your teacher.")
+            if s["opts"].get("chromium_only") and not chromium_browser(user_agent):
+                raise PermissionError(BROWSER_MSG)
             if s["opts"].get("helper"):
                 ag = self._agent_for(ip)
                 if not ag or not ag["status"].get("ready"):
@@ -455,7 +468,7 @@ class ExamMode:
                 self._save()
             return rec.get("locked") if rec else None
 
-    def gate(self, token, path, query, page, ip=""):
+    def gate(self, token, path, query, page, ip="", user_agent=""):
         """None when the request may be served, else (status, message) - the server's own safeguards."""
         labs = labs_for(path, query, page)
         if labs is None:
@@ -471,6 +484,8 @@ class ExamMode:
                 return None
             if s["timeup"]:
                 return 403, "The time for the exam is over."
+            if s["opts"].get("chromium_only") and not chromium_browser(user_agent):
+                return 403, BROWSER_MSG
             if s["opts"].get("helper"):
                 ag = self._agent_for(ip)
                 if not ag or not ag["status"].get("ready"):

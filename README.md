@@ -21,7 +21,7 @@ Students open one address on the lab network and get:
 | **Circuit simulator** | ✅ Full | [Falstad CircuitJS](https://www.falstad.com/circuit/) (3.4 MB): draw schematics and watch current flow live, analog and digital, ~380 example circuits; offline, its service worker and Dropbox import disabled. |
 | **Diagrams (draw.io)** | ✅ Full | Self-hosted draw.io 32.7, offline, cloud storage disabled; saves/exports to the student's PC. |
 | **Network simulation** | ✅ Built for FoCT | *FoCT NetSim*: PCs, laptops, servers, hubs, switches, routers; IPv4/masks/gateways/static routes; Ethernet MAC learning, ARP, ICMP `ping`/`tracert`, TTL, unreachable messages; animated packets, step mode and header inspector; example networks and a troubleshooting exercise. (Packet Tracer and GNS3 cannot run in a browser.) |
-| **Office suite** | ✅ (heavier) | ONLYOFFICE editors compiled for the browser ([ranuts/document](https://github.com/ranuts/document)): Word/Excel/PowerPoint `.docx/.xlsx/.pptx`, save as PDF. English UI, open fonts metric-compatible with Arial, Times New Roman, Courier New, Calibri and Cambria. Needs 4 GB+ RAM on the PC. |
+| **Office suite** | ✅ (heavier) | ONLYOFFICE editors compiled for the browser ([ranuts/document](https://github.com/ranuts/document)): Word/Excel/PowerPoint `.docx/.xlsx/.pptx`, save as PDF. English UI, open fonts metric-compatible with Arial, Times New Roman, Courier New, Calibri and Cambria. Works in Edge, Chrome and Firefox. New files use Calibri, and new documents are A4 with 2.54 cm margins; the original build swapped Calibri for the Chinese font DengXian, which Windows outside China lacks. The original build reported every document opened to 360's servers (which editor, the file type, load times and a browser ID; not the contents or file names) and fetched missing fonts from there; setup switches both off, so Office talks only to the lab server. Needs 4 GB+ RAM on the PC. |
 
 **Student files are never stored on the server.** Every app saves to and opens from the
 student's own computer (download, or the browser's "Save as" picker in secure mode). Unsaved code is
@@ -50,8 +50,8 @@ limit, not the server.
   (`web/`) takes about 1.1 GB. Internet is needed **once** for `tools/setup.py` (about 860 MB of
   downloads, cached in `.downloads/` and `.build/`, about 1 GB; delete those two folders after
   setup if disk space is short). Afterwards the lab runs fully offline.
-* **Student PCs:** a current **Chrome or Edge** (Firefox works too). 4 GB RAM minimum, 8 GB
-  recommended for Office and Java.
+* **Student PCs:** a current **Chrome or Edge**, or **Firefox** (see [Firefox](#firefox)). 4 GB
+  RAM minimum, 8 GB recommended for Office and Java.
 
 ## Install and start
 
@@ -91,6 +91,25 @@ The CA is **name-constrained** to private IP ranges and local host names, so a l
 impersonate public websites. Keep `server/certs/foct-lab-ca.key` on the server only. If the
 university has a real certificate (e.g. for `vlabs.adtu.in`), use
 `--cert fullchain.pem --key privkey.pem` instead.
+
+## Firefox
+
+Every lab runs in Firefox too (tested with Firefox 157), Office included. The differences:
+
+* **Saving** always goes to the Downloads folder. Firefox has no "Save as" picker for web pages.
+* **Exam mode** works the same: copy, paste and dragging are blocked, the watermark shows, and
+  sign-in, collecting work and all the server's safeguards apply. Collecting Jupyter notebooks
+  needs Firefox 126 or newer.
+* Firefox's own developer-tools keys are blocked too: Ctrl+Shift+K, E, M and Z, and Shift+F5, F7
+  and F9. In text boxes and code editors, Ctrl+Shift+K and Ctrl+Shift+Z keep their editing
+  meaning.
+* Two things Firefox cannot do. Shift+right-click always opens Firefox's own menu, and there is no
+  second-screen check.
+* For exams that need every safeguard, tick **Only Microsoft Edge or Google Chrome can take the
+  exam** on the control page. Firefox then shows "Use Microsoft Edge or Google Chrome", and the
+  server refuses its sign-in and lab files. The server tells browsers apart by the name they
+  send, which a determined student can change.
+* With the exam helper, the exam runs in the helper's Edge window anyway.
 
 ## Exam mode
 
@@ -176,6 +195,8 @@ are on by default.
 * **Time limit.** A countdown shows in each student's bar, with warnings at 10 minutes and
   1 minute. When it reaches zero, every PC sends its work and the labs lock. **+10 minutes**
   reopens them.
+* **Only Microsoft Edge or Google Chrome** (optional). Other browsers, such as Firefox, are asked
+  to use one of them and get no sign-in and no lab files. See [Firefox](#firefox).
 * **Your actions.** Lock or let back in a single student, and send a message to every screen.
 
 **In every exam page.** These are reported to you:
@@ -192,7 +213,7 @@ are on by default.
 * Text that appears 200+ characters at once in a code editor is noted. Paste is blocked, so
   such text was injected or typed by a tool.
 * A second screen is noted, in secure (HTTPS) mode only; browsers offer this check only on
-  secure pages.
+  secure pages, and Firefox not at all.
 
 **Tamper detection and lock.**
 

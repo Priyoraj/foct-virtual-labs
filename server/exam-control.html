@@ -110,6 +110,8 @@
         <select id="leave"><option value="log">only note it here</option><option value="warn">warn the student</option><option value="lock">warn, and lock after</option></select>
         <input type="number" id="leave_limit" min="1" max="20" value="3"> <span class="muted">times</span></div>
       <label class="check"><input type="checkbox" id="fullscreen"><span><b>Require full screen</b> <span class="muted">(leaving it pauses the exam on that PC until the student returns)</span></span></label>
+      <label class="check"><input type="checkbox" id="chromium_only"><span><b>Only Microsoft Edge or Google Chrome</b> can take the exam
+        <span class="muted">(they support every safeguard; in Firefox, Shift+right-click always opens Firefox&rsquo;s own menu, and there is no second-screen check)</span></span></label>
       <label class="f" for="allow">Only these PCs may sign in <span class="muted">(optional, e.g. 192.168.1.20-192.168.1.110, 10.0.5.0/24)</span></label>
       <input type="text" id="allow" placeholder="any PC on the lab network">
 
@@ -196,7 +198,7 @@ function readForm() {
     minutes: +$("minutes").value || 0, labs, allow: $("allow").value.trim(),
     opts: { block_open: $("block_open").checked, block_keys: $("block_keys").checked, tamper_lock: $("tamper_lock").checked,
             unlock: document.querySelector("input[name=unlock]:checked").value, leave: $("leave").value,
-            leave_limit: +$("leave_limit").value || 3, fullscreen: $("fullscreen").checked,
+            leave_limit: +$("leave_limit").value || 3, fullscreen: $("fullscreen").checked, chromium_only: $("chromium_only").checked,
             helper: $("helper").checked, helper_taskmgr: $("helper_taskmgr").checked, helper_admin: $("helper_admin").checked,
             helper_usb: $("helper_usb").value, helper_kill: $("helper_kill").value },
   };
@@ -209,7 +211,7 @@ function fillForm(e) {
   const labs = e.labs;
   $("labs").querySelectorAll("input").forEach((el) => { el.checked = !labs || labs.includes(el.value); });
   const o = e.opts || {};
-  for (const k of ["block_open", "block_keys", "tamper_lock", "fullscreen"]) $(k).checked = !!o[k];
+  for (const k of ["block_open", "block_keys", "tamper_lock", "fullscreen", "chromium_only"]) $(k).checked = !!o[k];
   document.querySelector(`input[name=unlock][value=${o.unlock === "teacher" ? "teacher" : "auto"}]`).checked = true;
   $("leave").value = o.leave || "log";
   $("leave_limit").value = o.leave_limit || 3;
