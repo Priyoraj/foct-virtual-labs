@@ -14,6 +14,7 @@ Needs internet once (about 860 MB of downloads). Re-running is safe: finished
 components are skipped, and downloads are cached in ./.downloads.
 """
 import argparse
+import base64
 import gzip
 import hashlib
 import http.client
@@ -778,6 +779,79 @@ def setup_pywheels():
     mark_done(dest, version)
 
 
+# Run in the notebook kernel when it starts (see patch_kernel). Students know "!pip install" from Colab:
+# here it works like "%pip install". Other shell commands, and modules the lab does not have, get a
+# plain explanation instead of "OSError: Not available" or a bare ModuleNotFoundError.
+KERNEL_HINTS = r'''
+def _foct_kernel_hints():
+    import re, sys
+    import pyodide_kernel
+    from IPython.utils.text import SList
+
+    shell = pyodide_kernel.ipython_shell
+    bang_pip = re.compile(r"^(\s*)!\s*(?:pip3?|python3?\s+-m\s+pip|py\s+-m\s+pip)\s+install\b")
+
+    async def bang_pip_as_magic(lines):
+        return [bang_pip.sub(r"\1%pip install", line) for line in lines]
+
+    pyodide_kernel.kernel_instance.lite_transform_manager.line_transforms.insert(0, bang_pip_as_magic)
+
+    note = ("Hint: shell commands (!...) cannot run here: this lab runs inside the browser and has no terminal.\n"
+            "To install a package, use %pip install <name>. Most packages need no install: just import them.")
+
+    def system(cmd, *args, **kwargs):
+        print(note, file=sys.stderr)
+
+    def getoutput(cmd, *args, **kwargs):
+        print(note, file=sys.stderr)
+        return SList()
+
+    shell.system = system
+    shell.getoutput = getoutput
+
+    def missing_module(self, etype, value, tb, tb_offset=None):
+        name = (getattr(value, "name", None) or "").split(".")[0] or "This module"
+        if name in ("tkinter", "_tkinter", "turtle"):
+            hint = f"{name} needs a desktop window, which a lab in the browser cannot open. For charts, use matplotlib."
+        elif name in ("tensorflow", "torch", "torchvision", "keras"):
+            hint = f"{name} is too big to run in a browser. For machine learning, use scikit-learn (import sklearn)."
+        else:
+            hint = (f"{name} is not part of this lab. The lab's packages load by themselves when imported; "
+                    f"%pip install {name} also looks in the lab server's extra packages, and on PyPI when this PC "
+                    f"is online (pure-Python packages only).")
+        try:                                     # the hint goes under the traceback, in the same error output
+            stb = self.InteractiveTB.structured_traceback(etype, value, tb, tb_offset=tb_offset)
+            self._showtraceback(etype, value, stb + ["", "Hint: " + hint])
+        except Exception:
+            self.showtraceback((etype, value, tb), tb_offset=tb_offset)
+            print("\nHint: " + hint, file=sys.stderr)
+
+    shell.set_custom_exc((ModuleNotFoundError,), missing_module)
+
+try:
+    _foct_kernel_hints()
+except Exception as _foct_error:
+    print("FoCT Virtual Labs: notebook hints not loaded:", _foct_error)
+del _foct_kernel_hints
+'''
+
+
+def patch_kernel(dest):
+    """Run KERNEL_HINTS right after the kernel imports pyodide_kernel (in each worker bundle)."""
+    anchor = '.push("import pyodide_kernel")'
+    code = base64.b64encode(KERNEL_HINTS.encode("utf-8")).decode("ascii")
+    line = f'.push("import pyodide_kernel","exec(__import__(\'base64\').b64decode(\'{code}\').decode(\'utf-8\'))")'
+    patched = 0
+    for js in (dest / "extensions" / "@jupyterlite" / "pyodide-kernel-extension" / "static").glob("*.js"):
+        s = js.read_text(encoding="utf-8")
+        if anchor in s:
+            js.write_text(s.replace(anchor, line), encoding="utf-8")
+            patched += 1
+    if not patched:
+        raise RuntimeError("JupyterLite changed: could not add the FoCT notebook hints to the kernel")
+    log(f"  notebook hints added to {patched} kernel files")
+
+
 def setup_jupyterlite():
     dest = WEB / "apps" / "notebook"
     src = ROOT / "tools" / "jupyterlite"
@@ -786,6 +860,7 @@ def setup_jupyterlite():
         if p.is_file():
             stamp.update(p.name.encode())
             stamp.update(p.read_bytes())
+    stamp.update(KERNEL_HINTS.encode())              # the notebook hints are part of the build too
     version = f"{JUPYTERLITE_VERSION}-{stamp.hexdigest()[:10]}"
     if is_done(dest, version):
         return log("  already built")
@@ -811,6 +886,7 @@ def setup_jupyterlite():
     env = dict(os.environ, PYTHONUTF8="1")
     subprocess.check_call([str(py), "-m", "jupyter", "lite", "build",
                            "--output-dir", str(dest)], cwd=work, env=env)
+    patch_kernel(dest)
     mark_done(dest, version)
 
 

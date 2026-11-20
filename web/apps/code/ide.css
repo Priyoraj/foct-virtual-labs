@@ -86,6 +86,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .k-sys.run:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
 .k-exit { display: block; margin-top: 8px; font-family: var(--font); font-size: .84rem; }
 .k-exit.ok { color: var(--ok); } .k-exit.bad { color: var(--bad); }
+.k-sys.k-hint { color: var(--text); background: var(--gold-100); border-left: 3px solid var(--warn); border-radius: 6px;
+                padding: 7px 10px; white-space: pre-wrap; line-height: 1.5; font-size: .82rem; }
 .con-input {
   font: inherit; color: #1f6feb; font-weight: 600; background: var(--gold-100);
   border: 0; border-bottom: 2px solid var(--gold); outline: none; padding: 0 4px; margin: 0;

@@ -2,6 +2,7 @@
 import { LANGS, monacoLanguageFor } from "./langs.js";
 import { registerLexYacc } from "./lexyacc-examples.js";
 import { Console } from "./console.js";
+import { hintsFor } from "./hints.js";
 import { ClangRunner, PythonRunner, JavaRunner, JdkJavaRunner } from "./runners/runners.js";
 import {
   toast, modal, prompt, saveToDisk, pickFiles, downloadBlob, makeZip, systemCheck, inputMode,
@@ -404,6 +405,7 @@ async function run() {
   if (settings.clearOnRun) con.clear();
   const preset = $("stdinText").value;
   con.system(`▶ ${sel.main}  ·  ${new Date().toLocaleTimeString()}`, "run");
+  const mark = con.pre.textContent.length, runId = ++runCount;   // where this run's output starts
   if (preset && LANG.runner !== "java" && MODE === "batch") con.system("Using the text in the Input tab as keyboard input.");
   else if (preset) con.system("Reading the Input tab first, then from the keyboard.");
   setStatus(LANG.runner === "python" ? "Starting Python…" : "Compiling…");
@@ -438,8 +440,22 @@ async function run() {
     if (result.note) con.system(result.note);
     if (LANG.id === "python") linkTraceback();
     showFiles(result.files || []);
+    showHints(sel.files, mark, runId);
   }
   setStatus(result?.compiled === false ? "Compilation failed" : "Ready");
+}
+
+// After a run: explain what a lab in the browser cannot do (pip, shell commands, starting programs).
+let runCount = 0;
+async function showHints(files, mark, runId) {
+  try {
+    con.flush();
+    const all = con.pre.textContent;
+    const output = all.length >= mark ? all.slice(mark) : all.slice(-20000);
+    const hints = await hintsFor(LANG, files, output);
+    if (runId !== runCount) return;                       // another run has started meanwhile
+    for (const text of hints) con.system(text, "k-hint");
+  } catch { /* a hint is a nicety; never let it disturb the run */ }
 }
 
 function stop() {
