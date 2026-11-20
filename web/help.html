@@ -180,7 +180,8 @@ python server/serve.py --https    (also serve secure mode on port 8443)</pre>
       <li>opens the exam in its own full-screen Edge window, with no address bar and no internet;</li>
       <li>turns off Task Manager and the clipboard history;</li>
       <li>reports USB drives (optionally pausing the exam until the drive is removed) and a second screen;</li>
-      <li>with administrator rights, also turns off developer tools and blocks USB drives.</li>
+      <li>with administrator rights, also turns off developer tools and blocks USB drives;</li>
+      <li>with administrator rights, also cuts the PC off from the internet while the lab network keeps working. Only the PC&rsquo;s active routes change, never its network settings: the internet comes back when you end the exam, or at once if the PC restarts.</li>
     </ul>
     <p>The server gives the labs only to PCs whose helper is running, and only in the helper&rsquo;s window. The PC goes back to normal when you end the exam, or at the next sign-in if it restarts.</p>
     <p>Press <b>Collect work and end exam</b> afterwards. Only the server PC can switch exam mode or download submissions, and exam mode stays on if the server restarts. It stops casual copying. For strict exams, also turn off the browser&rsquo;s developer tools with the Edge or Chrome policy <i>DeveloperToolsAvailability</i>&nbsp;=&nbsp;2.</p>

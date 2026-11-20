@@ -256,6 +256,17 @@ they can start. It needs no administrator rights. While the exam runs, it:
 * **With administrator rights** (optional; only when the PC's account has them, after Windows'
   usual prompt): turns off developer tools in Edge and Chrome (`DeveloperToolsAvailability` = 2)
   and blocks USB drives.
+* **Cuts the PC off from the internet** (optional, also with administrator rights) while the lab
+  network keeps working. Made for labs with static IP addresses:
+  * The helper takes the default routes (IPv4 and IPv6) out of the PC's *active* routing table
+    only. The PC's network settings (IP address, mask, gateway, DNS) are never changed.
+  * PCs on the lab's own subnet need no gateway, so the lab server, and every other PC there,
+    can still be reached. If the lab server is on another subnet, the helper first gives it a
+    route of its own through the gateway.
+  * A default route that comes back (the cable plugged in again, a Wi-Fi network or phone hotspot
+    joined) is taken out again within 3 seconds.
+  * If the lab server cannot be reached without the internet, the helper leaves the internet on
+    rather than lose the exam, and says so on the control page.
 
 **Enforced by the server.**
 
@@ -265,8 +276,9 @@ they can start. It needs no administrator rights. While the exam runs, it:
 * If the helper is stopped, the server stops serving that PC's labs within 20 seconds and the page
   asks for the helper again. Running it again resumes the exam.
 * The control page shows each student's helper status: running, Task Manager off, developer tools
-  off, USB blocked, USB drives, screens. It also lists the PCs where the helper runs but nobody
-  has signed in yet.
+  off, USB blocked, internet off, USB drives, screens, and anything it could not do (for example
+  "internet not cut off (no administrator rights)"; the badge then turns amber). It also lists the
+  PCs where the helper runs but nobody has signed in yet.
 
 **Back to normal.**
 
@@ -275,6 +287,10 @@ they can start. It needs no administrator rights. While the exam runs, it:
   administrator changes.
 * If the PC restarts first, the helper finishes this at the next sign-in, from a one-time
   start-up entry, and administrator changes are undone at start-up by a one-time task.
+* The internet comes back when you end the exam: the helper puts back exactly the routes it took
+  out (listed in `%ProgramData%\FoCTExam\routes.txt`). If the PC restarts, the internet is back at
+  once, because Windows rebuilds the active routing table from the PC's network settings at every
+  start. Nothing can be left cut off for good.
 * Running it with `/restore` does the same by hand.
 * If the lab server cannot be reached for 30 minutes, the helper puts the PC back by itself.
 

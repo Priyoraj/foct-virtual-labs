@@ -123,6 +123,7 @@
       <div id="helperOpts" style="margin-left: 26px">
         <label class="check"><input type="checkbox" id="helper_taskmgr" checked><span>Turn off Task Manager and the clipboard history during the exam</span></label>
         <label class="check"><input type="checkbox" id="helper_admin" checked><span>If the PC&rsquo;s account has administrator rights: turn off developer tools in Edge and Chrome, and block USB drives <span class="muted">(the PC shows its usual &ldquo;allow changes&rdquo; prompt)</span></span></label>
+        <label class="check"><input type="checkbox" id="helper_internet" checked><span>If the PC&rsquo;s account has administrator rights: cut the PC off from the internet; the lab network keeps working <span class="muted">(the internet comes back when the exam ends, or at once if the PC restarts)</span></span></label>
         <div class="row" style="margin-top: 4px"><label for="helper_usb">When a USB drive is connected:</label>
           <select id="helper_usb"><option value="pause">pause the exam on that PC until it is removed</option><option value="note">only note it here</option></select></div>
         <label class="f" for="helper_kill">Programs to close and keep closed <span class="links"><button type="button" id="killDefault">default list</button></span></label>
@@ -200,6 +201,7 @@ function readForm() {
             unlock: document.querySelector("input[name=unlock]:checked").value, leave: $("leave").value,
             leave_limit: +$("leave_limit").value || 3, fullscreen: $("fullscreen").checked, chromium_only: $("chromium_only").checked,
             helper: $("helper").checked, helper_taskmgr: $("helper_taskmgr").checked, helper_admin: $("helper_admin").checked,
+            helper_internet: $("helper_internet").checked,
             helper_usb: $("helper_usb").value, helper_kill: $("helper_kill").value },
   };
 }
@@ -215,7 +217,7 @@ function fillForm(e) {
   document.querySelector(`input[name=unlock][value=${o.unlock === "teacher" ? "teacher" : "auto"}]`).checked = true;
   $("leave").value = o.leave || "log";
   $("leave_limit").value = o.leave_limit || 3;
-  for (const k of ["helper", "helper_taskmgr", "helper_admin"]) $(k).checked = !!o[k];
+  for (const k of ["helper", "helper_taskmgr", "helper_admin", "helper_internet"]) $(k).checked = !!o[k];
   $("helper_usb").value = o.helper_usb === "note" ? "note" : "pause";
   $("helper_kill").value = o.helper_kill || "";
 }
@@ -226,9 +228,9 @@ function helperCell(h) {
   if (!h) return "";
   if (!h.running) return '<span class="pill bad" title="The exam helper is not running on this PC">helper off</span>';
   const parts = [h.ready ? "ready" : "starting", h.taskmgr ? "Task Manager off" : "", h.devtools ? "developer tools off" : "",
-                 h.usbblock ? "USB blocked" : "", h.usb ? `USB drive: ${h.usb}` : "", h.screens > 1 ? `${h.screens} screens` : "",
-                 h.problem || ""].filter(Boolean).join(" · ");
-  return `<span class="pill ${h.ready && !h.usb ? "ok" : "warn"}" title="${esc(parts)}">helper</span>`;
+                 h.usbblock ? "USB blocked" : "", h.netoff ? "internet off" : "", h.usb ? `USB drive: ${h.usb}` : "",
+                 h.screens > 1 ? `${h.screens} screens` : "", h.problem || ""].filter(Boolean).join(" · ");
+  return `<span class="pill ${h.ready && !h.usb && !h.problem ? "ok" : "warn"}" title="${esc(parts)}">helper</span>`;
 }
 
 function show(data) {

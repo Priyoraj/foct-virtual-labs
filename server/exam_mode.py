@@ -78,6 +78,7 @@ OPTS = {"block_open": True,      # opening files from the PC / pen drive, and th
         "helper": False,         # students must run the exam helper (exam-helper.vbs) on their Windows PC
         "helper_taskmgr": True,  # ... which turns off Task Manager and the clipboard history during the exam
         "helper_admin": True,    # ... and, with administrator rights: developer tools off, USB drives blocked
+        "helper_internet": True,  # ... and, with administrator rights: no internet on the PC, the lab network still works
         "helper_usb": "pause",   # a USB drive on the PC: "pause" the exam there while it is connected, or "note" it
         "helper_kill": HELPER_KILL}
 EVENT_KINDS = {"left", "fullscreen", "devtools", "tamper", "bigins", "screen2", "blocked"}
@@ -284,7 +285,7 @@ class ExamMode:
         o["leave"] = o["leave"] if o["leave"] in ("log", "warn", "lock") else "log"
         o["leave_limit"] = max(1, min(20, int(o["leave_limit"] or 3)))
         for k in ("block_open", "block_keys", "tamper_lock", "fullscreen", "chromium_only", "helper", "helper_taskmgr",
-                  "helper_admin"):
+                  "helper_admin", "helper_internet"):
             o[k] = bool(o[k])
         o["helper_usb"] = "note" if o["helper_usb"] == "note" else "pause"
         o["helper_kill"] = ", ".join(dict.fromkeys(m.group(0).lower() for m in EXE_RE.finditer(str(o["helper_kill"] or ""))))
@@ -522,7 +523,8 @@ class ExamMode:
 
     def helper_settings(self):
         o = self.state["opts"]
-        return {"taskmgr": bool(o["helper_taskmgr"]), "admin": bool(o["helper_admin"]), "kill": o["helper_kill"]}
+        return {"taskmgr": bool(o["helper_taskmgr"]), "admin": bool(o["helper_admin"]),
+                "internet": bool(o.get("helper_internet")), "kill": o["helper_kill"]}
 
     def agent_hello(self, ip, info):
         """A PC's exam helper starts. Returns its token, the kiosk key for the exam browser and the settings."""
@@ -562,6 +564,7 @@ class ExamMode:
             st = {"ready": bool(status.get("ready")), "browser": bool(status.get("browser")),
                   "taskmgr": bool(status.get("taskmgr")), "admin": bool(status.get("admin")),
                   "devtools": bool(status.get("devtools")), "usbblock": bool(status.get("usbblock")),
+                  "netoff": bool(status.get("netoff")),
                   "usb": str(status.get("usb") or "")[:40], "screens": int(status.get("screens") or 0),
                   "problem": str(status.get("problem") or "")[:200], "killed": str(status.get("killed") or "")[:300],
                   "relaunched": int(status.get("relaunched") or 0)}
@@ -717,7 +720,7 @@ class ExamMode:
         st = ag["status"]
         return {"running": True, "ready": st.get("ready"), "pc": ag.get("pc"), "taskmgr": st.get("taskmgr"),
                 "admin": st.get("admin"), "devtools": st.get("devtools"), "usbblock": st.get("usbblock"),
-                "usb": st.get("usb"), "screens": st.get("screens"), "problem": st.get("problem")}
+                "netoff": st.get("netoff"), "usb": st.get("usb"), "screens": st.get("screens"), "problem": st.get("problem")}
 
     def zip_file(self):
         """The exam folder as a zip in a temporary file: <title>/<Name>_<Enrolment>/..., roster.csv, incidents.csv."""

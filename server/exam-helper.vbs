@@ -7,7 +7,8 @@
 '     internet (only the lab server can be reached);
 '   - turns off Task Manager and the clipboard history (if the teacher chose that);
 '   - with administrator rights, when this PC allows them: turns off the developer tools in Edge
-'     and Chrome and blocks USB drives;
+'     and Chrome, blocks USB drives, and cuts the PC off from the internet while the lab network
+'     keeps working (if the PC restarts, the internet is back at once);
 '   - tells the lab server every few seconds what it sees (USB drives, a second screen, programs
 '     it had to close). The lab server lets this PC take part in the exam only while it runs.
 ' It needs no administrator rights, and everything it changes it puts back: when the teacher ends
@@ -22,7 +23,7 @@
 Option Explicit
 
 Const SERVER = "__FOCT_SERVER__"
-Const VERSION = "1"
+Const VERSION = "2"
 Const APPNAME = "FoCT exam helper"
 Const BEAT_MS = 3000
 Const SYSTEM_MODAL = 4096
@@ -40,7 +41,7 @@ For i = 0 To WScript.Arguments.Count - 1
   End Select
 Next
 
-Dim HOME, MHOME, BACKUP, MBACKUP, LOGFILE, PROFILE, RUNONCE, TASKNAME
+Dim HOME, MHOME, BACKUP, MBACKUP, ROUTES, LOGFILE, PROFILE, RUNONCE, TASKNAME
 If testMode Then
   HOME = sh.ExpandEnvironmentStrings("%TEMP%") & "\FoCTExamTest"
   MHOME = HOME & "\machine"
@@ -50,6 +51,7 @@ Else
 End If
 BACKUP = HOME & "\backup.txt"
 MBACKUP = MHOME & "\backup-machine.txt"
+ROUTES = MHOME & "\routes.txt"                            ' routes taken out to cut off the internet
 LOGFILE = HOME & "\helper.log"
 PROFILE = HOME & "\edge"
 RUNONCE = "HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce\!FoCTExamRestore"
@@ -63,8 +65,8 @@ Const USB_DENY = "HKLM\SOFTWARE\Policies\Microsoft\Windows\RemovableStorageDevic
 ' Never closed, whatever the list says: Windows itself, the exam browser and this script.
 Const NEVER = ",explorer.exe,dwm.exe,csrss.exe,winlogon.exe,lsass.exe,services.exe,svchost.exe,smss.exe,wininit.exe,ctfmon.exe,sihost.exe,fontdrvhost.exe,taskhostw.exe,runtimebroker.exe,searchhost.exe,startmenuexperiencehost.exe,shellexperiencehost.exe,textinputhost.exe,wscript.exe,cscript.exe,rundll32.exe,conhost.exe,msedge.exe,msedgewebview2.exe,"
 
-Dim token, kiosk, title, killList, optTaskmgr, optAdmin, myPid, elevated, edgeExe
-Dim tmOff, devOff, usbBlocked, problem, killedNow, relaunched, screens, lastScreens, ready, beats
+Dim token, kiosk, title, killList, optTaskmgr, optAdmin, optInternet, myPid, elevated, edgeExe
+Dim tmOff, devOff, usbBlocked, netOff, netBlocking, routesOk, problem, killedNow, relaunched, screens, lastScreens, ready, beats
 
 EnsureDir HOME
 Log "---- start " & Join(ArgList(), " ") & " (version " & VERSION & ")"
@@ -120,6 +122,7 @@ Sub Main()
           "  - close other programs (save your work in them first)," & vbCrLf & _
           "  - open the exam in a full-screen browser without internet" & vbCrLf
     If optTaskmgr Then msg = msg & "  - turn off Task Manager and the clipboard history" & vbCrLf
+    If optInternet Then msg = msg & "  - cut this PC off from the internet (the lab network keeps working)" & vbCrLf
     msg = msg & vbCrLf & "Your PC goes back to normal when the exam ends, or when it restarts." & vbCrLf & vbCrLf & "Start the exam?"
     If MsgBox(msg, vbOKCancel + vbQuestion + SYSTEM_MODAL, APPNAME) <> vbOK Then
       Bye "cancelled by the student"
@@ -128,8 +131,8 @@ Sub Main()
   End If
 
   elevated = IsElevated()
-  If testMode Then elevated = optAdmin                    ' try the administrator part too (on test keys)
-  If optAdmin And Not elevated And Not elevatedArg And Not testMode And IsAdminAccount() Then
+  If testMode Then elevated = optAdmin Or optInternet     ' try the administrator part too (on test keys)
+  If (optAdmin Or optInternet) And Not elevated And Not elevatedArg And Not testMode And IsAdminAccount() Then
     If AskElevation() Then Exit Sub                       ' the elevated copy carries on
   End If
 
@@ -145,6 +148,7 @@ Sub ReadSettings(resp)
   killList = "," & Replace(LCase(JStr(resp, "kill")), " ", "") & ","
   optTaskmgr = JBool(resp, "taskmgr")
   optAdmin = JBool(resp, "admin")
+  optInternet = JBool(resp, "internet")
   If testMode Then WriteText HOME & "\token.txt", token
 End Sub
 
@@ -164,26 +168,36 @@ Sub Lockdown()
     BackupValue BACKUP, CLIPHIST_KEY
     tmOff = RegSet(TASKMGR_KEY, 1, "REG_DWORD")
     RegSet CLIPHIST_KEY, 0, "REG_DWORD"
-    If Not tmOff Then problem = "Task Manager could not be turned off"
+    If Not tmOff Then AddProblem "Task Manager could not be turned off"
   End If
-  If elevated And optAdmin Then
+  If elevated And (optAdmin Or optInternet) Then
     EnsureDir MHOME
     If LCase(WScript.ScriptFullName) <> LCase(MHOME & "\exam-helper.vbs") Then fso.CopyFile WScript.ScriptFullName, MHOME & "\exam-helper.vbs", True
-    BackupValue MBACKUP, EDGE_DEVTOOLS
-    BackupValue MBACKUP, CHROME_DEVTOOLS
-    BackupValue MBACKUP, USB_DENY
-    devOff = RegSet(EDGE_DEVTOOLS, 2, "REG_DWORD")
-    RegSet CHROME_DEVTOOLS, 2, "REG_DWORD"
-    usbBlocked = RegSet(USB_DENY, 1, "REG_DWORD")
-    ' if the PC restarts during the exam, Windows puts these back at start-up
+    ' If the PC restarts during the exam (a power cut too), Windows puts these back at start-up. Set
+    ' up before anything changes, so that no change is ever without its way back.
     RunHidden "schtasks /Create /F /RU SYSTEM /SC ONSTART /TN """ & TASKNAME & """ /TR ""wscript.exe //B \""" & MHOME & "\exam-helper.vbs\"" /restore-machine""", True
+    If optAdmin Then
+      BackupValue MBACKUP, EDGE_DEVTOOLS
+      BackupValue MBACKUP, CHROME_DEVTOOLS
+      BackupValue MBACKUP, USB_DENY
+      devOff = RegSet(EDGE_DEVTOOLS, 2, "REG_DWORD")
+      RegSet CHROME_DEVTOOLS, 2, "REG_DWORD"
+      usbBlocked = RegSet(USB_DENY, 1, "REG_DWORD")
+    End If
+  End If
+  If optInternet Then
+    If elevated Then
+      NetBlock
+    Else
+      AddProblem "internet not cut off (no administrator rights)"
+    End If
   End If
   RunHidden "cmd /c echo off| clip", True                 ' empty the clipboard
   KillSweep True                                          ' every other browser too, before the exam browser starts
   CleanProfile
   StartBrowser
   ready = True
-  Log "locked down: taskmgr=" & tmOff & " admin=" & elevated & " devtools=" & devOff & " usbblock=" & usbBlocked
+  Log "locked down: taskmgr=" & tmOff & " admin=" & elevated & " devtools=" & devOff & " usbblock=" & usbBlocked & " internet off=" & netOff
 End Sub
 
 Sub RunExam()
@@ -198,6 +212,7 @@ Sub RunExam()
       Log "exam browser was closed: opening it again"
       StartBrowser
     End If
+    If netBlocking Then NetKeepOff
     beats = beats + 1
     If beats Mod 10 = 0 Then screens = ScreenCount()
     resp = Http("POST", SERVER & "/__exam/agent/beat", BeatJson())
@@ -228,7 +243,7 @@ Sub RestoreAll(quiet)
   CloseBrowser
   RestoreFile BACKUP
   RegDel RUNONCE
-  If fso.FileExists(MBACKUP) And (elevated Or IsElevated()) Then RestoreMachine
+  If (fso.FileExists(MBACKUP) Or fso.FileExists(ROUTES)) And (elevated Or IsElevated()) Then RestoreMachine
   WScript.Sleep 1500
   CleanProfile
   If token <> "" Then Bye "PC put back to normal"
@@ -237,6 +252,7 @@ Sub RestoreAll(quiet)
 End Sub
 
 Sub RestoreMachine()
+  NetRestore
   RestoreFile MBACKUP
   RunHidden "schtasks /Delete /F /TN """ & TASKNAME & """", True
   Log "machine settings put back"
@@ -249,7 +265,8 @@ End Sub
 Function BeatJson()
   BeatJson = "{""token"":""" & JEsc(token) & """,""status"":{""ready"":" & JB(ready) & ",""browser"":" & JB(BrowserRunning()) & _
              ",""taskmgr"":" & JB(tmOff) & ",""admin"":" & JB(elevated) & ",""devtools"":" & JB(devOff) & _
-             ",""usbblock"":" & JB(usbBlocked) & ",""usb"":""" & JEsc(UsbDrives()) & """,""screens"":" & CInt(screens) & _
+             ",""usbblock"":" & JB(usbBlocked) & ",""netoff"":" & JB(netOff) & _
+             ",""usb"":""" & JEsc(UsbDrives()) & """,""screens"":" & CInt(screens) & _
              ",""problem"":""" & JEsc(problem) & """,""killed"":""" & JEsc(killedNow) & """,""relaunched"":" & CInt(relaunched) & "}}"
 End Function
 
@@ -394,6 +411,229 @@ Function ScreenCount()
   t = Trim(Replace(Replace(ReadText(f), vbCr, ""), vbLf, ""))
   If IsNumeric(t) And t <> "" Then n = CInt(t)
   ScreenCount = n
+End Function
+
+' ============================================================================ internet off, lab network on
+' Only the PC's active routing table changes, never its network settings. The default routes (the
+' way to the internet) are taken out; PCs on the lab's own subnet need no route, so the lab network
+' keeps working, and the lab server gets a route of its own if it is on another subnet. Windows
+' rebuilds the active table from the network settings at every start, so a restart brings the
+' internet back by itself; at the end of the exam the routes taken out are put back. ROUTES lists
+' the changes: "boot|<start time>", then "cut|family|interface|prefix|next hop|metric" for each
+' default route taken out and "kept|family|interface|prefix|next hop" for each route added.
+Sub NetBlock()
+  Dim tries, answered
+  If fso.FileExists(ROUTES) Then NetRestore               ' left over from an earlier run
+  EnsureDir MHOME
+  WriteText ROUTES, "boot|" & BootTime() & vbCrLf
+  KeepLabRoutes
+  NetCut
+  netOff = testMode Or (DefaultRoutes() = "" And routesOk)
+  netBlocking = True
+  ' The lab server must still answer. If it does not, give the internet back rather than lose the exam.
+  answered = False
+  For tries = 1 To 3
+    If Http("POST", SERVER & "/__exam/agent/beat", BeatJson()) <> "" Then
+      answered = True
+      Exit For
+    End If
+    WScript.Sleep 1000
+  Next
+  If Not answered Then
+    NetRestore
+    AddProblem "internet not cut off: without it the lab server could not be reached"
+  ElseIf Not netOff Then
+    AddProblem "the internet could not be cut off completely"
+  End If
+End Sub
+
+Sub NetCut()
+  ' takes every default route out of the active table, noting each one first so it can be put back
+  Dim ln, p, saved
+  saved = ReadText(ROUTES)
+  For Each ln In Split(DefaultRoutes(), vbLf)
+    p = Split(ln, "|")                                    ' family|interface|prefix|next hop|metric
+    If UBound(p) = 4 Then
+      If InStr(saved, "cut|" & ln & vbCrLf) = 0 Then AppendText ROUTES, "cut|" & ln
+      RouteCmd "delete", p(0), p(1), p(2), p(3), ""
+    End If
+  Next
+End Sub
+
+Sub NetKeepOff()
+  ' a default route came back (network cable plugged in again, a Wi-Fi network joined): out it goes
+  If testMode Then Exit Sub
+  If DefaultRoutes() <> "" Then
+    Log "a default route came back: taking it out again"
+    NetCut
+    netOff = (DefaultRoutes() = "" And routesOk)
+  ElseIf routesOk Then
+    netOff = True
+  End If
+End Sub
+
+Sub NetRestore()
+  ' puts back the routes taken out for the exam; after a restart Windows has done that already
+  Dim text, ln, p
+  netBlocking = False
+  netOff = False
+  If Not fso.FileExists(ROUTES) Then Exit Sub
+  text = ReadText(ROUTES)
+  If InStr(text, "boot|" & BootTime() & vbCrLf) > 0 Then
+    For Each ln In Split(text, vbCrLf)
+      p = Split(ln, "|")
+      If UBound(p) = 5 Then
+        If p(0) = "cut" Then RouteCmd "add", p(1), p(2), p(3), p(4), p(5)
+      End If
+    Next
+    For Each ln In Split(text, vbCrLf)
+      p = Split(ln, "|")
+      If UBound(p) = 4 Then
+        If p(0) = "kept" Then RouteCmd "delete", p(1), p(2), p(3), p(4), ""
+      End If
+    Next
+    Log "internet routes put back"
+  Else
+    Log "the PC has restarted since the internet was cut off: its routes are back already"
+  End If
+  On Error Resume Next
+  fso.DeleteFile ROUTES, True
+  On Error GoTo 0
+End Sub
+
+Sub KeepLabRoutes()
+  ' The lab server, and the DNS servers when the server goes by name, must stay reachable without a
+  ' default route: those on another subnet get a route through the gateway the PC uses now.
+  Dim host, list, a, best, ifx, gw
+  host = HostOf(SERVER)
+  If IsIPv4(host) Then list = host Else list = Resolve(host) & " " & DnsServers()
+  best = BestIPv4Default()                                ' interface|gateway
+  If best = "" Then Exit Sub
+  ifx = Split(best, "|")(0)
+  gw = Split(best, "|")(1)
+  For Each a In Split(Trim(list), " ")
+    If IsIPv4(a) And Left(a, 4) <> "127." Then
+      If Not OnLink(a) And InStr(ReadText(ROUTES), "|" & a & "/32|") = 0 Then
+        AppendText ROUTES, "kept|4|" & ifx & "|" & a & "/32|" & gw
+        RouteCmd "add", "4", ifx, a & "/32", gw, ""
+      End If
+    End If
+  Next
+End Sub
+
+Function DefaultRoutes()
+  ' the default routes (IPv4 and IPv6) of the active routing table, one line each:
+  ' family|interface|prefix|next hop|metric. routesOk says whether the table could be read.
+  Dim svc, rs, r, out, fam
+  out = ""
+  routesOk = False
+  On Error Resume Next
+  Set svc = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\StandardCimv2")
+  If Err.Number = 0 Then Set rs = svc.ExecQuery("SELECT DestinationPrefix, InterfaceIndex, NextHop, RouteMetric, AddressFamily FROM MSFT_NetRoute WHERE DestinationPrefix='0.0.0.0/0' OR DestinationPrefix='::/0'")
+  If Err.Number = 0 Then
+    For Each r In rs
+      If Err.Number <> 0 Then Exit For
+      If r.AddressFamily = 2 Then fam = "4" Else fam = "6"
+      If out <> "" Then out = out & vbLf
+      out = out & fam & "|" & r.InterfaceIndex & "|" & r.DestinationPrefix & "|" & r.NextHop & "|" & r.RouteMetric
+    Next
+    routesOk = (Err.Number = 0)
+  End If
+  If Not routesOk Then Log "could not read the routing table: " & Err.Description
+  Err.Clear
+  On Error GoTo 0
+  DefaultRoutes = out
+End Function
+
+Function BestIPv4Default()
+  ' interface|gateway of the IPv4 default route Windows prefers (lowest total metric)
+  Dim r, low
+  BestIPv4Default = ""
+  low = -1
+  On Error Resume Next
+  For Each r In wmi.ExecQuery("SELECT InterfaceIndex, NextHop, Metric1 FROM Win32_IP4RouteTable WHERE Destination='0.0.0.0' AND Mask='0.0.0.0'")
+    If low < 0 Or r.Metric1 < low Then
+      low = r.Metric1
+      BestIPv4Default = r.InterfaceIndex & "|" & r.NextHop
+    End If
+  Next
+  On Error GoTo 0
+End Function
+
+Sub RouteCmd(verb, family, ifx, prefix, nexthop, metric)
+  ' store=active: the change lasts until the PC restarts. (Without it, netsh would change the
+  ' PC's network settings too, and deleting a route would delete the gateway for good.)
+  Dim cmd
+  cmd = "netsh interface ipv" & family & " " & verb & " route prefix=" & prefix & " interface=" & ifx
+  If nexthop <> "" And nexthop <> "0.0.0.0" And nexthop <> "::" Then cmd = cmd & " nexthop=" & nexthop
+  If metric <> "" Then cmd = cmd & " metric=" & metric
+  cmd = cmd & " store=active"
+  If Not testMode Then Log cmd
+  RunHidden cmd, True
+End Sub
+
+Function OnLink(ip)
+  ' whether an IPv4 address is on one of this PC's own subnets (reachable without a gateway)
+  Dim cfg, k, j, a, b, m, same
+  OnLink = False
+  a = Split(ip, ".")
+  On Error Resume Next
+  For Each cfg In wmi.ExecQuery("SELECT IPAddress, IPSubnet FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled=TRUE")
+    If Not (IsNull(cfg.IPAddress) Or IsNull(cfg.IPSubnet)) Then
+      For k = 0 To UBound(cfg.IPAddress)
+        If IsIPv4(cfg.IPAddress(k)) And IsIPv4(cfg.IPSubnet(k)) Then
+          b = Split(cfg.IPAddress(k), ".")
+          m = Split(cfg.IPSubnet(k), ".")
+          same = True
+          For j = 0 To 3
+            If (CInt(a(j)) And CInt(m(j))) <> (CInt(b(j)) And CInt(m(j))) Then same = False
+          Next
+          If same Then OnLink = True
+        End If
+      Next
+    End If
+  Next
+  On Error GoTo 0
+End Function
+
+Function IsIPv4(s)
+  Dim re
+  Set re = New RegExp
+  re.Pattern = "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"
+  IsIPv4 = re.Test(s & "")
+End Function
+
+Function Resolve(host)
+  ' the address Windows finds for a name (no ping needs to come back for that)
+  Dim p
+  Resolve = ""
+  On Error Resume Next
+  For Each p In wmi.ExecQuery("SELECT ProtocolAddress FROM Win32_PingStatus WHERE Address='" & Replace(host, "'", "") & "'")
+    Resolve = p.ProtocolAddress & ""
+  Next
+  On Error GoTo 0
+End Function
+
+Function DnsServers()
+  Dim cfg, out
+  out = ""
+  On Error Resume Next
+  For Each cfg In wmi.ExecQuery("SELECT DNSServerSearchOrder FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled=TRUE")
+    If Not IsNull(cfg.DNSServerSearchOrder) Then out = out & " " & Join(cfg.DNSServerSearchOrder, " ")
+  Next
+  On Error GoTo 0
+  DnsServers = Trim(out)
+End Function
+
+Function BootTime()
+  ' when Windows last started: tells whether a restart has put the routes back already
+  Dim o
+  BootTime = ""
+  On Error Resume Next
+  For Each o In wmi.ExecQuery("SELECT LastBootUpTime FROM Win32_OperatingSystem")
+    BootTime = o.LastBootUpTime & ""
+  Next
+  On Error GoTo 0
 End Function
 
 ' ============================================================================ this process
@@ -588,7 +828,7 @@ Function JB(b)
 End Function
 
 Sub RunHidden(cmd, wait)
-  If testMode And (InStr(cmd, "schtasks") > 0 Or InStr(cmd, "clip") > 0) Then
+  If testMode And (InStr(cmd, "schtasks") > 0 Or InStr(cmd, "clip") > 0 Or InStr(cmd, "netsh") > 0) Then
     Log "test mode, would run: " & cmd
     Exit Sub
   End If
@@ -619,6 +859,20 @@ Sub WriteText(file, text)
   Set f = fso.OpenTextFile(file, 2, True)
   f.Write text
   f.Close
+End Sub
+
+Sub AppendText(file, line)
+  Dim f
+  Set f = fso.OpenTextFile(file, 8, True)
+  f.WriteLine line
+  f.Close
+End Sub
+
+Sub AddProblem(text)
+  ' reported to the teacher's control page with every beat
+  If problem <> "" Then problem = problem & "; "
+  problem = problem & text
+  Log "problem: " & text
 End Sub
 
 Sub Log(text)
