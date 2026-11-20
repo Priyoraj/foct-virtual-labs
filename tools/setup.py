@@ -16,6 +16,7 @@ components are skipped, and downloads are cached in ./.downloads.
 import argparse
 import gzip
 import hashlib
+import http.client
 import io
 import json
 import os
@@ -25,6 +26,7 @@ import subprocess
 import sys
 import tarfile
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -68,19 +70,47 @@ def log(msg):
     print(msg, flush=True)
 
 
-def download(url, name=None):
-    """Download url into the cache (resumable) and return the local path."""
+def download(url, name=None, tries=8):
+    """Download url into the cache (resumable) and return the local path.
+
+    A dropped connection is retried and continues where it stopped. The file moves into the
+    cache only once all of it has arrived, so a cut-off download is never used as a whole one."""
     CACHE.mkdir(parents=True, exist_ok=True)
     name = name or url.rstrip("/").split("/")[-1]
     dest = CACHE / name
     if dest.exists() and dest.stat().st_size > 0:
         return dest
     part = dest.with_suffix(dest.suffix + ".part")
+    for attempt in range(1, tries + 1):
+        try:
+            download_part(url, name, part)
+            break
+        except urllib.error.HTTPError as e:
+            if not (e.code in (416, 429) or e.code >= 500) or attempt == tries:
+                raise
+            if e.code == 416:          # the partial file does not fit the server's copy: start again
+                part.unlink(missing_ok=True)
+            err = f"HTTP {e.code}"
+        except (OSError, http.client.HTTPException) as e:
+            if attempt == tries:
+                raise
+            err = str(e) or type(e).__name__
+        log(f"    {name}: {err}; retrying ({attempt}/{tries - 1}) ...")
+        time.sleep(min(30, 3 * attempt))
+    part.replace(dest)
+    log(f"  saved {name} ({dest.stat().st_size >> 20} MB)")
+    return dest
+
+
+def download_part(url, name, part):
+    """One download attempt into the .part file, continuing it if the server allows."""
     have = part.stat().st_size if part.exists() else 0
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     if have:
         req.add_header("Range", f"bytes={have}-")
-    log(f"  downloading {name} ...")
+        log(f"  resuming {name} at {have >> 20} MB ...")
+    else:
+        log(f"  downloading {name} ...")
     with urllib.request.urlopen(req, timeout=60) as r:
         mode = "ab" if have and r.status == 206 else "wb"
         total = r.headers.get("Content-Length")
@@ -98,9 +128,9 @@ def download(url, name=None):
                     last = time.time()
                     pct = f"{done * 100 // total}%" if total else f"{done >> 20} MB"
                     log(f"    {name}: {pct}")
-    part.replace(dest)
-    log(f"  saved {name} ({dest.stat().st_size >> 20} MB)")
-    return dest
+    # urllib reports a dropped connection as a normal end of data, so check that all of it came.
+    if total is not None and done < total:
+        raise ConnectionError(f"connection closed at {done >> 20} of {total >> 20} MB")
 
 
 def fresh_dir(path):
