@@ -31,6 +31,12 @@ from urllib.parse import parse_qs
 
 UPLOAD_MAX = 50 * 1024 * 1024          # one file
 STUDENT_MAX = 300 * 1024 * 1024        # everything one student sends in one exam
+# A student who signs in again on the same PC (after a restart or a power cut, say) starts in a browser
+# without their drafts. What they sent before moves to a folder of its own, so nothing is replaced, and
+# their lab drafts (up to RESTORE_MAX each) go back to the page, which puts them back into the labs.
+EARLIER = "Earlier work until"
+RESTORE_MAX = 1024 * 1024
+DRAFT_DIRS = ("C", "C++", "Java", "Python", "Lex & Yacc", "SQL", "MongoDB", "SPICE", "Network")
 GRACE = 120                            # seconds after the exam ends during which late uploads still count
 STALE = 45                             # seconds without a check-in before a signed-in PC loses the labs
 EVENTS_KEPT = 300                      # per student; the counters keep counting
@@ -86,7 +92,7 @@ EVENT_NAMES = {"left": "Left the exam window", "fullscreen": "Left full screen",
                "tamper": "Exam protection changed", "bigins": "Large insertion in an editor", "screen2": "Second screen",
                "blocked": "Blocked", "stale": "Stopped checking in", "lock": "Locked", "unlock": "Unlocked",
                "timeup": "Time up", "usb": "USB drive connected", "kiosk": "Exam browser closed",
-               "closed": "Programs closed by the exam helper", "helper": "Exam helper"}
+               "closed": "Programs closed by the exam helper", "helper": "Exam helper", "again": "Signed in again"}
 
 
 def safe_name(text, fallback="file", limit=100):
@@ -402,8 +408,10 @@ class ExamMode:
             for t, r in same:
                 if r["ip"] == ip:                       # signing in again on the same PC
                     r.update(name=name, seen=time.time())
+                    kept, restore = self._set_aside(r)
+                    self._log(r, "again", f'earlier work kept in "{kept}"' if kept else "")
                     self._save()
-                    return t, r
+                    return t, r, restore
             folder = safe_name(f"{name}_{enrolment}", fallback="student", limit=120)
             used = {r["folder"] for r in self.students.values()}
             base, n = folder, 2
@@ -416,7 +424,50 @@ class ExamMode:
             self.students[token] = rec
             (self.exam_dir() / folder).mkdir(parents=True, exist_ok=True)
             self._save()
-            return token, rec
+            return token, rec, []
+
+    def _set_aside(self, rec):
+        """Before a student who signs in again can replace anything: move what they sent so far into
+        "Earlier work until <time>". Returns that folder's name (None if nothing was there) and the
+        latest version of each lab draft, for the page to put back (lock held)."""
+        home = self.exam_dir() / rec["folder"]
+        moving = [rel for rel in rec["files"] if not rel.startswith(EARLIER)]
+        name = None
+        if moving:
+            stamp = time.strftime("%H.%M")
+            name, n = f"{EARLIER} {stamp}", 2
+            while (home / name).exists():
+                name, n = f"{EARLIER} {stamp} ({n})", n + 1
+            for rel in moving:
+                size = rec["files"].pop(rel)
+                try:
+                    (home / name / rel).parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(home / rel, home / name / rel)
+                except OSError:
+                    continue                                # gone already: nothing to keep
+                rec["files"][f"{name}/{rel}"] = size
+            for rel in moving:                              # folders left empty
+                d = (home / rel).parent
+                while d != home:
+                    try:
+                        d.rmdir()
+                    except OSError:
+                        break
+                    d = d.parent
+        # The latest version of each lab draft, wherever it is now: files moved later come later in
+        # rec["files"], so they win. (Signing in twice in a row still finds the work.)
+        latest = {}
+        for rel, size in rec["files"].items():
+            path = rel.split("/", 1)[1] if rel.startswith(EARLIER) and "/" in rel else rel
+            if path.split("/", 1)[0] in DRAFT_DIRS and size <= RESTORE_MAX:
+                latest[path] = rel
+        restore = []
+        for path, rel in latest.items():
+            try:
+                restore.append({"path": path, "data": (home / rel).read_text(encoding="utf-8")})
+            except (OSError, UnicodeDecodeError):
+                pass
+        return name, restore
 
     def seen(self, token, ip):
         with self.lock:

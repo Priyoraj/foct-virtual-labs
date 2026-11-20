@@ -547,14 +547,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def exam_register(self):
         try:
             data = self.read_json()
-            token, rec = EXAM.register(data.get("exam"), data.get("name"), data.get("enrolment"), data.get("code"),
-                                       self.client_address[0], data.get("kiosk", ""), self.headers.get("User-Agent", ""))
+            token, rec, restore = EXAM.register(data.get("exam"), data.get("name"), data.get("enrolment"), data.get("code"),
+                                                self.client_address[0], data.get("kiosk", ""), self.headers.get("User-Agent", ""))
         except PermissionError as e:
             return self.refuse(409, str(e))
         except (ValueError, TypeError) as e:
             return self.refuse(400, str(e) if str(e) and " " in str(e) else "Please check your name and enrolment number.")
         print(f"{time.strftime('%H:%M')}  signed in: {rec['name']} ({rec['enrolment']}) from {self.client_address[0]}", flush=True)
-        body = json.dumps({"token": token, "name": rec["name"], "enrolment": rec["enrolment"], "folder": rec["folder"]})
+        body = json.dumps({"token": token, "name": rec["name"], "enrolment": rec["enrolment"], "folder": rec["folder"],
+                           "restore": restore})
         self.send_simple(200, body, "application/json; charset=utf-8", extra=[("Set-Cookie", student_cookie(token))])
 
     def exam_upload(self):

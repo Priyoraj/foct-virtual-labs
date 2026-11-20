@@ -136,6 +136,7 @@
     <li><b>&ldquo;Use the exam window&rdquo;:</b> the exam helper has already opened the exam in its own full-screen window; use that one.</li>
     <li><b>&ldquo;This lab is not part of the exam&rdquo;:</b> your teacher chose which labs can be used; go back to the home page and open one of those.</li>
     <li><b>The page asks for your name and enrolment no.:</b> an exam is starting. Type them carefully; they name the folder your teacher receives. Your work in the labs, and every file you save or download, then goes to your teacher by itself. To hand in any other file, for example one from your Downloads folder, use <b>Submit files</b> in the red bar.</li>
+    <li><b>The PC restarted during the exam:</b> run the exam helper again if your teacher uses it, and sign in with the same name and enrolment no. on the same PC. Your work in the labs comes back (up to about a minute before the restart), and what you sent before is kept for your teacher.</li>
   </ul>
 
   <h2 id="admin">For lab administrators</h2>
@@ -165,6 +166,7 @@ python server/serve.py --https    (also serve secure mode on port 8443)</pre>
       <li>The control page lists who has signed in.</li>
       <li><b>Download submissions (.zip)</b> asks every PC for its latest work, then saves <i>Exam&nbsp;title</i>.zip to your Downloads folder: one folder per student, named <i>Name_Enrolment</i>, and a roster.csv.</li>
       <li>The same folders are kept on the server PC in <code>submissions</code>.</li>
+      <li>If a student signs in again on the same PC (after a restart, say), what they sent before moves to <i>Earlier work until &lt;time&gt;</i> in their folder, so nothing is replaced, and their lab work goes back into their labs.</li>
     </ul>
     <p><b>Safeguards</b> (chosen on the same page):</p>
     <ul>

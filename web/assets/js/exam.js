@@ -311,6 +311,35 @@
   }
   const draftHash = (files) => hash(files.map((f) => f.path + "\0" + f.data).join("\0\0"));
 
+  // Signing in again on the same PC (after a restart, say): the server sends back the lab work it has,
+  // and it goes back into the labs that have nothing in this browser, so newer work here is never
+  // replaced. Returns the labs that got their work back.
+  function putBack(files) {
+    if (!Array.isArray(files)) return [];
+    const has = (k) => { try { return localStorage.getItem(k) != null; } catch { return true; } };
+    const code = {}, back = new Set();
+    for (const f of files) {
+      if (!f || typeof f.path !== "string" || typeof f.data !== "string") continue;
+      const i = f.path.indexOf("/"), dir = f.path.slice(0, i), name = f.path.slice(i + 1);
+      const id = Object.keys(CODE).find((k) => CODE[k] === dir);
+      const text = Object.keys(TEXT).find((k) => TEXT[k][0] === dir && TEXT[k][1] === name);
+      if (id) {
+        (code[id] = code[id] || []).push({ name, text: f.data, saved: f.data });
+      } else if (text && !has(text)) {
+        try { localStorage.setItem(text, f.data); back.add(dir); } catch { /* storage blocked */ }
+      } else if (dir === "Network" && !has("foct.netsim.draft")) {
+        try { ls.set("foct.netsim.draft", { name, net: JSON.parse(f.data) }); back.add("NetSim"); } catch { /* not a network */ }
+      }
+    }
+    for (const [id, tabs] of Object.entries(code)) {
+      if (!has(`foct.code.${id}`)) {
+        ls.set(`foct.code.${id}`, { tabs, active: tabs[0].name, at: Date.now() });
+        back.add(CODE[id]);
+      }
+    }
+    return [...back];
+  }
+
   // Jupyter notebooks live in IndexedDB; take the ones changed since the exam started.
   async function readNotebooks() {
     const DB = "JupyterLite Storage - /apps/notebook/";
@@ -860,13 +889,21 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
                                                      body: JSON.stringify({ exam: state.id, name, enrolment, code, kiosk: kioskKey() }) });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error || "Could not sign in. Ask your teacher.");
-        // What is already in this browser does not count as this exam's work.
-        const base = {};
-        for (const [k, list] of Object.entries(readDrafts())) base[k] = draftHash(list);
-        ls.set(`foct.exam.base.${state.id}`, base);
+        // What is already in this browser does not count as this exam's work, unless this browser
+        // signed in to this exam before: then that first count stands, so work done since is sent.
+        const baseKey = `foct.exam.base.${state.id}`;
+        if (!ls.get(baseKey)) {
+          const base = {};
+          for (const [k, list] of Object.entries(readDrafts())) base[k] = draftHash(list);
+          ls.set(baseKey, base);
+        }
+        const back = putBack(j.restore);     // after the base: work put back counts as this exam's work
+        // The server keeps what it had in "Earlier work until ...": send the latest of everything again.
+        ls.del(`foct.exam.sent.${state.id}`);
         me = { token: j.token, name: j.name, enrolment: j.enrolment, folder: j.folder, saved: null };
         ls.set(meKey(), me);
         ss.set("foct.exam.welcome", j.name);
+        if (back.length) ss.set("foct.exam.back", back);
         location.reload();          // the labs load now that the server knows this PC
       } catch (ex) {
         err.textContent = ex.message || "Could not sign in.";
@@ -916,8 +953,15 @@ html.foct-exam .foct-bar::after { background: linear-gradient(90deg, #dc2626, #f
   // ------------------------------------------------------------ start
   render();
   if (isTop) {
-    const welcome = ss.get("foct.exam.welcome");
-    if (welcome) { ss.del("foct.exam.welcome"); setTimeout(() => toast(`Welcome, ${welcome}. Your work is sent to your teacher automatically.`), 400); }
+    const welcome = ss.get("foct.exam.welcome"), back = ss.get("foct.exam.back");
+    if (welcome) {
+      ss.del("foct.exam.welcome");
+      ss.del("foct.exam.back");
+      const text = Array.isArray(back) && back.length
+        ? `Welcome back, ${welcome}. Your earlier work is back in: ${back.join(", ")}.`
+        : `Welcome, ${welcome}. Your work is sent to your teacher automatically.`;
+      setTimeout(() => toast(text), 400);
+    }
   }
   if (isTop || !canReadTop) {
     poll();

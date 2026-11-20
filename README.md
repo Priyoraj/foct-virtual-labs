@@ -153,6 +153,7 @@ server PC by itself:
     C/main.c, SQL/query.sql, Jupyter/<notebook>.ipynb ...   lab work
     Saved files/...                   files the student saved or downloaded
     Submitted files/...               files handed in with Submit files
+    Earlier work until 12.47/...      what was received before the student signed in again
 ```
 
 * **Collect work and end exam** does a final collection and then ends exam mode.
@@ -160,6 +161,17 @@ server PC by itself:
 * On the server PC the same folders are kept in `submissions/<Exam title>/`.
 * Only the latest version of each file is kept.
 * If the same enrolment number signs in on a second PC, that PC gets its own folder, so nothing is overwritten, and the roster marks it "2 PCs".
+* **Signing in again on the same PC** (after a restart or a power cut, say, when the exam browser
+  starts without the student's drafts):
+  * Everything received from that student so far first moves to `Earlier work until <time>/` in
+    their folder, so nothing they sent is ever replaced. The control page notes it, under the
+    student's details.
+  * Their lab work goes back into the labs: C, C++, Java, Python, Lex & Yacc, SQL, MongoDB, SPICE
+    and NetSim, each lab only if it has nothing in that browser, so newer work there is never
+    replaced. The student sees "Welcome back ... Your earlier work is back in: C, Java".
+  * Jupyter notebooks and saved or handed-in files stay in that folder; the student does not get
+    them back.
+  * Anything typed in the last minute before the power went off had not reached the server yet.
 
 Limits:
 
