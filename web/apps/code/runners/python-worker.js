@@ -212,23 +212,32 @@ async function init(cfg) {
   py.setStderr({ write: (b) => { out?.push("stderr", errDec.decode(b, { stream: true })); return b.length; }, isatty: true });
   if (cfg.interrupt) py.setInterruptBuffer(cfg.interrupt);
   await py.runPythonAsync(BOOT);
-  try {
-    extras = await (await fetch("/runtimes/pywheels/index.json")).json();
-  } catch { extras = {}; }
+  await loadExtras();
   post({ type: "ready", version: py.version, python: py.runPython("import sys; sys.version.split()[0]") });
+}
+
+// The lab's extra pure-Python packages: setup's (seaborn, openpyxl, ...) and the ones a teacher adds on the
+// lab server while the labs run. The list is always checked with the server, so a new package shows at once.
+let extrasAt = 0;
+async function loadExtras() {
+  try {
+    extras = await (await fetch("/runtimes/pywheels/index.json", { cache: "no-cache" })).json();
+  } catch { /* keep the list we have */ }
+  extrasAt = Date.now();
 }
 
 async function ensurePackages(code) {
   const msg = (m) => { out?.flush(); post({ type: "info", text: m.trim() + "\n" }); };
   await py.loadPackagesFromImports(code, { messageCallback: msg, errorCallback: msg });
-  // Pure-Python packages shipped with the lab (seaborn, openpyxl, ...) are installed on demand.
+  // Pure-Python packages of the lab are installed on demand, when the program imports them.
   const imports = py.pyodide_py.code.find_imports(code).toJs();
+  const missing = imports.filter((name) => !py.runPython(`_foct_find(${JSON.stringify(name)})`));
+  if (!missing.length) return;
+  if (Date.now() - extrasAt > 2000) await loadExtras();   // added (or removed) on the lab server since the last look?
   const want = [];
-  for (const name of imports) {
+  for (const name of missing) {
     const e = extras[name];
-    if (!e) continue;
-    const have = py.runPython(`_foct_find(${JSON.stringify(name)})`);
-    if (!have) want.push(e);
+    if (e && !want.some((w) => w.name === e.name)) want.push(e);
   }
   if (!want.length) return;
   const wheels = [...new Set(want.flatMap((e) => e.wheels))];

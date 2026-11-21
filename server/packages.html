@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Python packages · FoCT Virtual Labs</title>
+<link rel="icon" type="image/png" href="/assets/brand/favicon-32.png">
+<style>
+  :root { color-scheme: light dark; --navy: #342e6c; --red: #dc2626; --bg: #f5f4fb; --card: #fff; --line: #e3e1f2; --text: #1d1b33; --muted: #6b6890; --ok: #15803d; --warn: #b45309; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15142a; --card: #1f1d3a; --line: #34325c; --text: #ecebf8; --muted: #a9a6cf; --ok: #4ade80; --warn: #fbbf24; } }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font: 15px/1.5 "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  main { max-width: 900px; margin: 28px auto; padding: 0 16px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  header img { width: 46px; height: 46px; border-radius: 50%; background: #fff; padding: 2px; }
+  header h1 { font-size: 1.4rem; margin: 0; } header small { display: block; color: var(--muted); font-size: .85rem; font-weight: 500; }
+  header a { margin-left: auto; color: var(--muted); font-weight: 600; font-size: .9rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; box-shadow: 0 6px 24px rgba(30, 20, 90, .08); margin-bottom: 16px; }
+  h2 { font-size: 1.05rem; margin: 0 0 6px; }
+  .muted { color: var(--muted); font-size: .92rem; }
+  .small { font-size: .84rem; margin-top: 6px; }
+  .drop { margin-top: 14px; border: 2px dashed var(--line); border-radius: 12px; padding: 16px; text-align: center; color: var(--muted); }
+  .drop.over { border-color: var(--navy); background: rgba(52, 46, 108, .06); }
+  input[type=text] { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px; flex: 1; min-width: 200px; }
+  button { font: inherit; font-weight: 700; padding: 9px 16px; border-radius: 10px; border: 0; cursor: pointer; color: #fff; background: var(--navy); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.plain { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button.sm { padding: 3px 10px; font-size: .82rem; border-radius: 8px; }
+  .row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  .log { margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--bg);
+         font: 13px/1.55 Consolas, "Cascadia Mono", monospace; white-space: pre-wrap; max-height: 280px; overflow: auto; }
+  .log .good { color: var(--ok); font-weight: 700; } .log .bad { color: var(--red); } .log .warn { color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; margin-top: 10px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .82rem; }
+  td.num { white-space: nowrap; }
+  .err { color: var(--red); font-weight: 600; }
+  .ok { color: var(--ok); font-weight: 600; }
+  code { font-size: .88em; font-family: Consolas, "Cascadia Mono", monospace; }
+  td code { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+  ul { padding-left: 1.2em; margin: 6px 0 0; } li { margin: 4px 0; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/assets/brand/adtu-seal.png" alt="">
+    <h1>Python packages<small>FoCT Virtual Labs &middot; this page works only on the server PC</small></h1>
+    <a href="/__exam/control">Exam mode &rarr;</a>
+  </header>
+
+  <div class="card">
+    <h2>Add a package</h2>
+    <p class="muted">Type its name, the one used with <code>pip install</code>. This PC downloads it from PyPI, with the packages it needs. Students then just <b>import</b> it, in the Python IDE and in Jupyter, also during an exam: pages that are already open pick it up at their next run, without a reload.</p>
+    <form class="row" id="addForm">
+      <input type="text" id="name" aria-label="Package name" placeholder="e.g.  faker      or      pip install faker pyjokes" spellcheck="false" autocomplete="off">
+      <button id="add" type="submit">Add</button>
+    </form>
+    <div class="drop" id="drop">No internet on this PC? Drop <b>.whl</b> files here, or <button class="plain sm" id="pick" type="button">choose files</button>
+      <input type="file" id="file" accept=".whl" multiple hidden>
+      <div class="small">On a PC with internet: the package&rsquo;s page on pypi.org &rarr; <i>Download files</i> &rarr; the file ending in <code>-none-any.whl</code>. Bring the files of the packages it needs as well.</div>
+    </div>
+    <div class="log" id="log" aria-live="polite" hidden></div>
+  </div>
+
+  <div class="card">
+    <h2>Added packages</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Package</th><th>Students write</th><th>Brings along</th><th>Size</th><th>Added</th><th></th></tr></thead>
+        <tbody id="rows"><tr><td colspan="6" class="muted">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+    <p class="muted" id="already"></p>
+  </div>
+
+  <div class="card">
+    <h2>The lab&rsquo;s other servers</h2>
+    <p class="muted">With several lab servers, list the others here, and put the list on each of them as well. A package added or removed on one server is copied to the others within a minute, so only one of them needs internet.</p>
+    <div class="row">
+      <input type="text" id="servers" aria-label="The lab's other servers" placeholder="e.g. 192.168.1.11:8080, 192.168.1.12:8080" spellcheck="false" autocomplete="off">
+      <button id="saveServers" type="button">Save</button>
+      <button class="plain" id="syncNow" type="button">Share now</button>
+    </div>
+    <div class="muted small" id="me"></div>
+    <div class="err small" id="serversErr"></div>
+    <table id="peers" hidden><thead><tr><th>Server</th><th>Last look</th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <div class="card">
+    <h2>Good to know</h2>
+    <ul class="muted">
+      <li>Only <b>pure-Python</b> packages can be added. Packages with compiled code run in a browser only when Pyodide includes them, and those (numpy, pandas, scipy, scikit-learn, matplotlib, opencv &hellip;) are part of the lab already: students just import them.</li>
+      <li>In Jupyter, <code>%pip install name</code> finds the packages added here too, without internet.</li>
+      <li>After you remove a package, a page that has already imported it keeps it until that page is reloaded.</li>
+      <li>The packages are kept in the <code>packages</code> folder next to <code>web</code>: running setup again does not lose them.</li>
+    </ul>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ADMIN = { "Content-Type": "application/json", "X-FoCT-Admin": "1" };
+let view = null, timer = null, serversTouched = false, busy = false, notes = [];
+
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: ADMIN, body: JSON.stringify(body || {}) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `The server answered ${r.status}.`);
+  return data;
+}
+
+function ago(t, now) {
+  const s = Math.max(0, Math.round(now - t));
+  if (s < 50) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  return new Date(t * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+const size = (kb) => kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.max(1, kb)} KB`;
+
+function lineClass(l) {
+  if (/^(Added|Removed) /.test(l)) return "good";
+  if (/^(Looking up|Sending|\s)/.test(l)) return "";
+  if (/part of (the lab already|Python itself)|comes with /.test(l)) return "warn";
+  return "bad";
+}
+
+function drawLog() {
+  const job = (view && view.job) || {};
+  const lines = [...notes, ...(job.log || [])];
+  $("log").hidden = !lines.length && !job.running;
+  $("log").innerHTML = lines.map((l) => `<div class="${lineClass(l)}">${esc(l)}</div>`).join("")
+    + (job.running ? `<div class="muted">Working&hellip;</div>` : "");
+  $("log").scrollTop = $("log").scrollHeight;
+}
+
+function draw(v) {
+  view = v;
+  const running = !!(v.job && v.job.running) || busy;
+  $("add").disabled = running;
+  $("pick").disabled = running;
+  drawLog();
+
+  $("rows").innerHTML = v.packages.length ? v.packages.map((p) => `<tr>
+      <td><b>${esc(p.project)}</b> <span class="muted">${esc(p.version)}</span>${p.origin ? `<div class="muted small">from ${esc(p.origin.replace(/^https?:\/\//, ""))}</div>` : ""}</td>
+      <td>${p.imports.map((i) => `<code>import ${esc(i)}</code>`).join(" ")}${p.ready ? "" : `<div class="muted small">being copied&hellip;</div>`}</td>
+      <td class="muted">${esc(p.brings.join(", ")) || "&mdash;"}${p.uses.length ? `<div class="small">uses ${esc(p.uses.join(", "))} from the lab</div>` : ""}</td>
+      <td class="num">${size(p.kb)}</td>
+      <td class="num muted">${ago(p.time, v.now)}</td>
+      <td><button class="plain sm" data-remove="${esc(p.key)}" data-name="${esc(p.project)}">Remove</button></td></tr>`).join("")
+    : `<tr><td colspan="6" class="muted">None yet. Students can already import everything the lab has (below).</td></tr>`;
+  $("already").innerHTML = `Part of the lab already, nothing to add: Python ${esc(v.python)} with ${v.pyodide} packages from Pyodide (numpy, pandas, matplotlib, scipy, scikit-learn, sympy, networkx, requests &hellip;)`
+    + (v.base.length ? ` and ${esc(v.base.join(", "))}` : "") + ".";
+
+  if (!serversTouched) $("servers").value = v.servers.map((s) => s.replace(/^http:\/\//, "")).join(", ");
+  $("me").innerHTML = v.me.length ? `This server: <b>${esc(v.me.map((u) => u.replace(/^http:\/\//, "")).join("  or  "))}</b>. Put this address in the other servers&rsquo; lists.` : "";
+  const peers = v.servers.map((s) => {
+    const st = v.peers[s];
+    const state = !st ? `<span class="muted">not looked at yet</span>`
+      : st.ok ? `<span class="ok">in step</span> <span class="muted">${ago(st.when, v.now)}${st.got && st.got.length ? ` &middot; copied ${esc(st.got.join(", "))}` : ""}</span>`
+      : `<span class="err">cannot reach it</span> <span class="muted">${ago(st.when, v.now)} &middot; ${esc(st.error)}</span>`;
+    return `<tr><td>${esc(s.replace(/^http:\/\//, ""))}</td><td>${state}</td></tr>`;
+  });
+  $("peers").hidden = !peers.length;
+  $("peers").tBodies[0].innerHTML = peers.join("");
+
+  clearTimeout(timer);
+  timer = setTimeout(refresh, running ? 800 : 4000);
+}
+
+async function refresh() {
+  try {
+    draw(await fetch("/__packages/status", { cache: "no-store" }).then((r) => r.json()));
+  } catch {
+    clearTimeout(timer);
+    timer = setTimeout(refresh, 4000);
+  }
+}
+
+$("addForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const name = $("name").value.trim();
+  if (!name) return $("name").focus();
+  notes = [];
+  try {
+    await post("/__packages/add", { name });
+    $("name").value = "";
+  } catch (e) {
+    notes = [e.message];
+  }
+  refresh();
+});
+
+async function addFiles(list) {
+  const files = [...list].filter((f) => f.size);
+  if (!files.length) return;
+  busy = true;
+  notes = [];
+  if (view) draw(view);
+  const sent = [];
+  for (const f of files) {
+    notes.push(`Sending ${f.name} ...`);
+    drawLog();
+    try {
+      const r = await fetch("/__packages/upload", { method: "POST", body: f,
+        headers: { "X-FoCT-Admin": "1", "X-FoCT-Name": encodeURIComponent(f.name), "Content-Type": "application/octet-stream" } });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `The server answered ${r.status}.`);
+      sent.push(data.file);
+    } catch (e) {
+      notes.push(e.message);
+    }
+  }
+  try {
+    if (sent.length) await post("/__packages/add", { files: sent });
+  } catch (e) {
+    notes.push(e.message);
+  }
+  notes = notes.filter((n) => !/^Sending /.test(n));
+  busy = false;
+  refresh();
+}
+$("pick").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", () => { addFiles($("file").files); $("file").value = ""; });
+const drop = $("drop");
+drop.addEventListener("dragover", (ev) => { ev.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (ev) => { ev.preventDefault(); drop.classList.remove("over"); addFiles(ev.dataTransfer.files); });
+
+$("rows").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-remove]");
+  if (!b) return;
+  if (!confirm(`Remove ${b.dataset.name}? The labs will stop installing it${view && view.servers.length ? ", here and on the other servers" : ""}.`)) return;
+  b.disabled = true;
+  notes = [];
+  try {
+    await post("/__packages/remove", { key: b.dataset.remove });
+    notes = [`Removed ${b.dataset.name}.`];
+  } catch (e) {
+    notes = [e.message];
+  }
+  if (view) view.job = { log: [] };
+  refresh();
+});
+
+$("servers").addEventListener("input", () => { serversTouched = true; });
+$("saveServers").addEventListener("click", async () => {
+  $("serversErr").textContent = "";
+  try {
+    serversTouched = false;
+    draw(await post("/__packages/servers", { servers: $("servers").value }));
+  } catch (e) {
+    serversTouched = true;
+    $("serversErr").textContent = e.message;
+  }
+});
+$("syncNow").addEventListener("click", async () => {
+  $("serversErr").textContent = "";
+  try {
+    await post("/__packages/sync");
+    $("syncNow").textContent = "Looking at the other servers…";
+    setTimeout(() => { $("syncNow").textContent = "Share now"; refresh(); }, 3000);
+  } catch (e) {
+    $("serversErr").textContent = e.message;
+  }
+});
+
+refresh();
+</script>
+</body>
+</html>

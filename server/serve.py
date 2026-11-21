@@ -65,8 +65,10 @@ NOT_ISOLATED = ("/apps/drawio/", "/apps/office/")
 # Third-party folders installed by tools/setup.py. Each has a .foct-version marker, and their
 # files only change when setup installs a new version, so browsers may keep them (see send_file).
 MANAGED = ("/runtimes/", "/vendor/", "/apps/notebook/", "/apps/office/", "/apps/drawio/", "/apps/circuit/")
-# FoCT's own files inside those folders: edited by hand, so always revalidated.
-OWN_IN_MANAGED = ("/runtimes/javabox/host.html", "/runtimes/javabox/host.js", "/runtimes/javabox/FoctServer.java")
+# FoCT's own files inside those folders: edited by hand, so always revalidated. The two package lists change
+# whenever a teacher adds a Python package on the server (packages.py), so open labs see it at once.
+OWN_IN_MANAGED = ("/runtimes/javabox/host.html", "/runtimes/javabox/host.js", "/runtimes/javabox/FoctServer.java",
+                  "/runtimes/pywheels/index.json", "/apps/notebook/pypi/all.json")
 RT_COOKIE = "foct_rt"
 RT_MAX_AGE = 30 * 24 * 3600
 
@@ -105,6 +107,7 @@ GENERATION = RuntimeGeneration()
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from exam_mode import ExamMode, server_list  # noqa: E402
 import similarity  # noqa: E402
+import packages  # noqa: E402
 
 EXAM_FILE = Path(__file__).resolve().parent / "exam-state.json"
 EXAM_CONTROL = Path(__file__).resolve().parent / "exam-control.html"
@@ -118,6 +121,10 @@ SUBMISSIONS = ROOT / "submissions"
 MERGE = similarity.Jobs(SUBMISSIONS / ".merge", SUBMISSIONS)
 MERGE_ZIP_MAX = 4 * 1024 ** 3
 MERGE_BASE_MAX = 5 * 1024 ** 2
+# Python packages a teacher adds while the labs run (packages.py): the page on the server PC, and the list
+# itself, made in main() once the web folder is known (packages/ next to it).
+PACKAGES_PAGE = Path(__file__).resolve().parent / "packages.html"
+PACKAGES = None
 EXAM_TAG = b'<script src="/assets/js/exam.js"></script>'
 EXAM_TAG_VERSION = "x1"   # change with EXAM_TAG so browsers replace pages they cached with the old tag
 HEAD_RE = re.compile(rb"<head(?:\s[^>]*)?>", re.I)
@@ -238,7 +245,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                  "/__exam/event": self.exam_event, "/__exam/ok": self.exam_ok,
                  "/__exam/agent/hello": self.agent_hello, "/__exam/agent/beat": self.agent_beat,
                  "/__exam/agent/bye": self.agent_bye, "/__exam/merge/add": self.merge_add,
-                 "/__exam/merge/remove": self.merge_remove, "/__exam/merge/run": self.merge_run}.get(path)
+                 "/__exam/merge/remove": self.merge_remove, "/__exam/merge/run": self.merge_run,
+                 "/__packages/add": self.packages_add, "/__packages/upload": self.packages_upload,
+                 "/__packages/remove": self.packages_remove, "/__packages/servers": self.packages_servers,
+                 "/__packages/sync": self.packages_sync, "/__packages/ping": self.packages_ping}.get(path)
         if route:
             return route()
         self.deny()
@@ -264,6 +274,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except OSError:
                 return self.send_simple(404, "Not found", head=head, page=True)
             return self.send_simple(200, text, "text/plain; charset=utf-8", head=head)
+        if path == "/__packages" or path.startswith("/__packages/"):
+            return self.packages_get(path, head)
         if path == "/__exam":
             token = self.headers.get("X-FoCT-Token")
             you = EXAM.seen(token, self.client_address[0])
@@ -445,14 +457,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         ip = self.client_address[0]
         return ip.startswith("127.") or ip == "::1"
 
-    def admin_ok(self):
-        # Only the server PC may manage exam mode. The custom header stops other web pages
-        # (cross-site requests) from doing it through the administrator's browser.
+    def admin_ok(self, what="Exam mode"):
+        # Only the server PC may manage exam mode (and the Python packages). The custom header stops other
+        # web pages (cross-site requests) from doing it through the administrator's browser.
         if (self.is_local() and self.headers.get("X-FoCT-Admin") == "1"
                 and self.headers.get("Sec-Fetch-Site", "same-origin") in ("same-origin", "none")):
             return True
         self.close_connection = True
-        self.send_simple(403, "Exam mode can only be managed on the server PC.")
+        self.send_simple(403, f"{what} can only be managed on the server PC.")
         return False
 
     def read_json(self, limit=4096):
@@ -763,6 +775,96 @@ class Handler(http.server.BaseHTTPRequestHandler):
         print(f"{time.strftime('%H:%M')}  merging submissions (job {job})", flush=True)
         self.reply_json({"job": job})
 
+    # ------------------------------------------------------------ Python packages added while the labs run
+    def packages_get(self, path, head):
+        if path == "/__packages/peer.json":                 # read by the lab's other servers
+            return self.send_simple(200, PACKAGES.peer_json(), "application/json; charset=utf-8", head=head)
+        if path.startswith("/__packages/wheel/"):
+            target = PACKAGES.wheel_path(path[len("/__packages/wheel/"):])
+            if target is None:
+                return self.send_simple(404, "Not found", head=head)
+            return self.send_path(target, "application/zip", None, head)
+        if not self.is_local():
+            return self.send_simple(403, "Python packages can only be managed on the server PC.", head=head, page=True)
+        if path == "/__packages":
+            try:
+                page = PACKAGES_PAGE.read_text(encoding="utf-8")
+            except OSError:
+                return self.send_simple(404, "Not found", head=head, page=True)
+            return self.send_simple(200, page, "text/html; charset=utf-8", head=head)
+        if path == "/__packages/status":
+            return self.send_simple(200, json.dumps(PACKAGES.view()), "application/json; charset=utf-8", head=head)
+        return self.send_simple(404, "Not found", head=head, page=True)
+
+    def packages_add(self):
+        """Add packages by name from PyPI ({"name": "faker pyjokes"}), or the .whl files sent before ({"files": [...]})."""
+        if not self.admin_ok("Python packages"):
+            return
+        try:
+            data = self.read_json(16384)
+            if data.get("files"):
+                what = [str(f) for f in data["files"]][:50]
+                PACKAGES.start("wheels", what)
+            else:
+                what = packages.parse_request(data.get("name"))
+                if not what:
+                    return self.refuse(400, "Type the name of a package, the one used with pip install.")
+                PACKAGES.start("pypi", what)
+        except packages.Problem as e:
+            return self.refuse(409, str(e))
+        except (ValueError, TypeError):
+            return self.refuse(400, "bad request")
+        print(f"{time.strftime('%H:%M')}  adding Python packages: {', '.join(what)}", flush=True)
+        self.reply_json({"ok": True})
+
+    def packages_upload(self):
+        """One .whl file in the request body (X-FoCT-Name: its file name)."""
+        if not self.admin_ok("Python packages"):
+            return
+        try:
+            name = PACKAGES.stage_upload(urllib.parse.unquote(self.headers.get("X-FoCT-Name", "")),
+                                         int(self.headers.get("Content-Length") or -1), self.rfile)
+        except packages.Problem as e:
+            return self.refuse(400, str(e))
+        except (ValueError, OSError):
+            return self.refuse(400, "The file did not arrive; try again.")
+        self.reply_json({"file": name})
+
+    def packages_remove(self):
+        if not self.admin_ok("Python packages"):
+            return
+        try:
+            project = PACKAGES.remove(str(self.read_json().get("key", "")))
+        except packages.Problem as e:
+            return self.refuse(400, str(e))
+        except (ValueError, TypeError, OSError):
+            return self.refuse(400, "bad request")
+        print(f"{time.strftime('%H:%M')}  Python package removed: {project}", flush=True)
+        self.reply_json({"ok": True})
+
+    def packages_servers(self):
+        """The lab's other servers, which share their packages with this one."""
+        if not self.admin_ok("Python packages"):
+            return
+        try:
+            servers = server_list(self.read_json().get("servers", ""))
+        except (ValueError, TypeError) as e:
+            return self.refuse(400, str(e) if str(e).startswith("Please") else "bad request")
+        PACKAGES.set_servers(servers)
+        self.reply_json(PACKAGES.view())
+
+    def packages_sync(self):
+        if not self.admin_ok("Python packages"):
+            return
+        PACKAGES.wake()
+        self.reply_json({"ok": True})
+
+    def packages_ping(self):
+        """Another lab server says its packages changed. It only makes this server look at the servers it lists."""
+        self.close_connection = True                       # the (empty) body is not read
+        PACKAGES.ping()
+        self.reply_json({"ok": True})
+
     def cookie(self, name):
         for part in self.headers.get("Cookie", "").split(";"):
             key, _, value = part.strip().partition("=")
@@ -921,6 +1023,12 @@ def main():
     ips = lan_addresses()
     Handler.info = {"hostname": host, "http_port": args.port,
                     "https_port": args.https_port if args.https else None, "lan_ips": ips}
+    global PACKAGES
+    PACKAGES = packages.Packages(web_root.parent / "packages", web_root)
+    names = [*ips, "127.0.0.1", "localhost", host.lower()]
+    PACKAGES.me = {f"http://{n}:{args.port}" for n in names}
+    if args.https:
+        PACKAGES.me |= {f"https://{n}:{args.https_port}" for n in names}
 
     try:
         http_srv = LabServer((args.host, args.port), Handler)
@@ -957,6 +1065,7 @@ def main():
             print(f" Secure (HTTPS)   :  https://{ip}:{args.https_port}/")
         print("   (each PC must trust the lab certificate once - see Help > Secure mode)")
     print(f" Exam mode        :  http://localhost:{args.port}/__exam/control  (on this PC only)")
+    print(f" Python packages  :  http://localhost:{args.port}/__packages  (on this PC only)")
     print(line)
     print(" Students only need a browser (Chrome / Edge / Firefox). Their files are")
     print(" saved on their own PC; only exam work is sent here. Press Ctrl+C to stop.")

@@ -8,12 +8,15 @@ const TOO_BIG = new Set(["tensorflow", "torch", "torchvision", "keras"]);
 
 const norm = (s) => String(s).toLowerCase().replace(/[-_.]+/g, "-");
 
-// What the Python lab has: pip names and import names, from Pyodide's list and the lab's extras.
-let known = null;
+// What the Python lab has: pip names and import names, from Pyodide's list and the lab's extras (which grow
+// when a teacher adds a package on the lab server, so they are read again after a while).
+let known = null, knownAt = 0;
 function packages() {
-  known ??= Promise.all([
+  if (known && Date.now() - knownAt < 15000) return known;
+  knownAt = Date.now();
+  known = Promise.all([
     fetch("/runtimes/pyodide/pyodide-lock.json").then((r) => r.json()).catch(() => null),
-    fetch("/runtimes/pywheels/index.json").then((r) => r.json()).catch(() => null),
+    fetch("/runtimes/pywheels/index.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => null),
   ]).then(([lock, extras]) => {
     const byName = new Map(), byImport = new Map();      // pip name -> import name; import name -> itself
     for (const p of Object.values((lock && lock.packages) || {})) {
@@ -53,7 +56,8 @@ async function pythonHints(files, output) {
                    "There is nothing to install here. A package loads by itself when your program imports it."];
     for (const a of asked(pip)) {
       const imp = byName.get(norm(a)) || byImport.get(a.toLowerCase());
-      lines.push(imp ? `  ${a}: already here, write   import ${imp}` : `  ${a}: not part of this lab (pip cannot add packages here)`);
+      lines.push(imp ? `  ${a}: already here, write   import ${imp}`
+                     : `  ${a}: not part of this lab yet. Your teacher can add it on the lab server; then it loads by itself.`);
     }
     lines.push("Delete the pip line and run again.");
     hints.push(lines.join("\n"));
@@ -72,7 +76,8 @@ async function pythonHints(files, output) {
       const imp = byName.get(norm(top));
       hints.push(imp && imp !== top
         ? `Hint: "${top}" is the name pip uses. In Python this package is   import ${imp}`
-        : `Hint: ${top} is not part of this lab, and pip cannot add packages here. If ${top} is your own file, add it with + as ${top}.py.`);
+        : `Hint: ${top} is not part of this lab. Your teacher can add it on the lab server (pure-Python packages); ` +
+          `then it loads by itself when your program imports it. If ${top} is your own file, add it with + as ${top}.py.`);
     }
   }
 

@@ -848,9 +848,9 @@ def _foct_kernel_hints():
         elif name in ("tensorflow", "torch", "torchvision", "keras"):
             hint = f"{name} is too big to run in a browser. For machine learning, use scikit-learn (import sklearn)."
         else:
-            hint = (f"{name} is not part of this lab. The lab's packages load by themselves when imported; "
-                    f"%pip install {name} also looks in the lab server's extra packages, and on PyPI when this PC "
-                    f"is online (pure-Python packages only).")
+            hint = (f"{name} is not part of this lab. Your teacher can add it on the lab server (pure-Python "
+                    f"packages); then it loads by itself when imported. When this PC is online, "
+                    f"%pip install {name} also looks on PyPI.")
         try:                                     # the hint goes under the traceback, in the same error output
             stb = self.InteractiveTB.structured_traceback(etype, value, tb, tb_offset=tb_offset)
             self._showtraceback(etype, value, stb + ["", "Hint: " + hint])
@@ -859,6 +859,61 @@ def _foct_kernel_hints():
             print("\nHint: " + hint, file=sys.stderr)
 
     shell.set_custom_exc((ModuleNotFoundError,), missing_module)
+
+    # The lab's extra packages (seaborn, openpyxl ... and the ones a teacher adds on the lab server while the
+    # notebook is open) install by themselves when a cell imports them, as in the Python IDE. piplite keeps the
+    # package list it read first, so a name missing from it is looked up again in a fresh copy (%pip install too).
+    import importlib.util
+    import piplite
+    import piplite.piplite as lite
+    from pyodide.http import pyfetch
+
+    lookup = lite._get_pypi_json_from_index
+    canon = lambda n: re.sub(r"[-_.]+", "-", n).lower()
+
+    async def fresh_lookup(name, piplite_url, fetch_kwargs, compat_layer):
+        args = dict(piplite_url=piplite_url, fetch_kwargs=fetch_kwargs, compat_layer=compat_layer)
+        info = await lookup(name=name, **args)
+        if info is None and canon(name) != name:
+            info = await lookup(name=canon(name), **args)
+        if info is None and lite._PIPLITE_INDICES.pop(piplite_url, None) is not None:
+            info = await lookup(name=canon(name), **args)
+        return info
+
+    lite._get_pypi_json_from_index = fresh_lookup
+
+    import_line = re.compile(r"^\s*(?:from\s+([A-Za-z_]\w*)|import\s+([^#;\n]+))")
+
+    def imported(lines):
+        names = []
+        for line in lines:
+            m = import_line.match(line)
+            if not m:
+                continue
+            for part in [m.group(1)] if m.group(1) else [p.split()[0] for p in m.group(2).split(",") if p.split()]:
+                top = part.split(".")[0]
+                if re.fullmatch(r"[A-Za-z_]\w*", top) and top not in names:
+                    names.append(top)
+        return names
+
+    async def auto_install(lines):
+        try:
+            missing = [n for n in imported(lines) if n not in sys.modules and importlib.util.find_spec(n) is None]
+            if missing:
+                index = await (await pyfetch("/runtimes/pywheels/index.json", cache="no-cache")).json()
+                projects = []
+                for n in missing:
+                    e = index.get(n)
+                    if isinstance(e, dict) and e.get("name") and e["name"] not in projects:
+                        projects.append(e["name"])
+                if projects:
+                    print("Installing " + ", ".join(projects) + " ...")
+                    await piplite.install(projects, keep_going=True)
+        except Exception as err:
+            print(f"Could not install a package: {err}", file=sys.stderr)
+        return lines
+
+    pyodide_kernel.kernel_instance.lite_transform_manager.line_transforms.append(auto_install)
 
 try:
     _foct_kernel_hints()
@@ -907,12 +962,19 @@ def setup_jupyterlite():
                            "jupyterlab-widgets", "jupyter-server"])
     work = fresh_dir(BUILD / "jupyterlite")
     shutil.copytree(src, work, dirs_exist_ok=True)
-    # Offline %pip install: wheels in pypi/ are indexed by the build (piplite).
+    # Offline %pip install: wheels in pypi/ are indexed by the build (piplite). Only setup's own packages: the
+    # lab server adds the ones teachers add there (server/packages.py), and takes them out again when removed.
     wheels = WEB / "runtimes" / "pywheels"
     if wheels.is_dir():
         (work / "pypi").mkdir(exist_ok=True)
+        try:
+            index = json.loads((wheels / "index.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            index = {}
+        own = {w for e in index.values() if not e.get("added") for w in e.get("wheels", [])}
         for w in wheels.glob("*.whl"):
-            shutil.copy2(w, work / "pypi" / w.name)
+            if w.name in own:
+                shutil.copy2(w, work / "pypi" / w.name)
     if dest.exists():
         shutil.rmtree(dest)
     env = dict(os.environ, PYTHONUTF8="1")

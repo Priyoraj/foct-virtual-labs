@@ -10,8 +10,8 @@ Students open one address on the lab network and get:
 |---|---|---|
 | **C** | ✅ Full | Clang 22 compiled to WebAssembly, runs in the student's browser. Live keyboard input, files, `math.h`, `time.h`. Turbo-C habits (`conio.h`, `getch`, `clrscr`, `gets`, `system("cls")`, `dos.h`) are supported. |
 | **C++** | ✅ Full | Clang 22 + libc++ (C++11–C++23, STL, `bits/stdc++.h`), exceptions via WebAssembly exception handling (wasi-sdk 34 libraries); uncaught exceptions print the usual `terminate called after throwing …`. A precompiled-header cache makes repeat runs take about 1 s. No threads. |
-| **Python (plain IDE)** | ✅ Full | Pyodide 314 (Python 3.14.2) with 356 packages: NumPy, pandas, Matplotlib (plots shown inline), SciPy, scikit-learn, statsmodels, SymPy, NetworkX, OpenCV, Pillow, NLTK, polars, duckdb … Extra pure-Python packages (seaborn, openpyxl, plotly, tabulate, XlsxWriter, prettytable, ipywidgets) are bundled and install on first import. Not possible in a browser: TensorFlow, PyTorch, tkinter/turtle. There is no pip: a `pip install` line, a missing module or `os.system` gets a plain hint under the error (which packages are already here and their `import` names). |
-| **Python (Jupyter)** | ✅ Full | JupyterLite 0.8 (JupyterLab + classic Notebook) with the same offline Pyodide; `%pip install seaborn …` works offline, `!pip install` (as in Colab) works the same, and other packages come from PyPI when the PC is online. Other `!` shell commands and missing modules get a hint. |
+| **Python (plain IDE)** | ✅ Full | Pyodide 314 (Python 3.14.2) with 356 packages: NumPy, pandas, Matplotlib (plots shown inline), SciPy, scikit-learn, statsmodels, SymPy, NetworkX, OpenCV, Pillow, NLTK, polars, duckdb … Extra pure-Python packages (seaborn, openpyxl, plotly, tabulate, XlsxWriter, prettytable, ipywidgets) are bundled and install on first import, and teachers can [add more while the labs run](#adding-python-packages-while-the-labs-run). Not possible in a browser: TensorFlow, PyTorch, tkinter/turtle. There is no pip: a `pip install` line, a missing module or `os.system` gets a plain hint under the error (which packages are already here and their `import` names). |
+| **Python (Jupyter)** | ✅ Full | JupyterLite 0.8 (JupyterLab + classic Notebook) with the same offline Pyodide; the lab's extra packages install by themselves when a cell imports them, `%pip install seaborn …` works offline, `!pip install` (as in Colab) works the same, and other packages come from PyPI when the PC is online. Other `!` shell commands and missing modules get a hint. |
 | **Java** | ✅ Full in secure mode, basic over HTTP | Over HTTPS: the real **OpenJDK 21** compiled to WebAssembly ([JavaBox](https://github.com/bmarti44/javabox)), exact Java behaviour. Over plain HTTP: javac + TeaVM (7 MB, offline); console programs, `Scanner`, `printf` work, but JVM-raised errors (÷0, bad index, `null`) stop the program instead of reaching `catch`. No Swing/AWT/JDBC either way. |
 | **SQL** | ✅ Full (light) | *SQL Lab*: SQLite 3.54 ([sql.js](https://github.com/sql-js/sql.js), 0.75 MB) and real PostgreSQL 18 ([PGlite](https://pglite.dev), about 5 MB compressed) in the browser. Joins, views, transactions, triggers, PL/pgSQL functions and procedures; MySQL-style `SHOW TABLES`/`DESC`/`USE`; sample company (EMP/DEPT), university and library databases; scripts saved as `.sql`, whole databases as `.sqlite`/`.pgdata.tar.gz`. |
 | **MongoDB** | ✅ Light | *MongoDB Lab*: a mongosh-style shell over a MongoDB-compatible engine ([mingo](https://github.com/kofrasa/mingo); with the acorn parser about 0.1 MB compressed). CRUD, query/update operators, cursors and `it`, unique indexes and `explain()` (COLLSCAN vs IXSCAN), aggregation with `$lookup`, map-reduce, `$text` search, `$jsonSchema` validation, JSON/CSV import and export; sample college, shop and library databases. Data stays in the browser (IndexedDB) and can be saved to one file. No users, replication or sharding (there is no server). |
@@ -147,6 +147,38 @@ Every lab runs in Firefox too (tested with Firefox 157), Office included. The di
   server refuses its sign-in and lab files. The server tells browsers apart by the name they
   send, which a determined student can change.
 * With the exam helper, the exam runs in the helper's Edge window anyway.
+
+## Adding Python packages while the labs run
+
+When a class or an exam needs a package the lab does not have, add it on the server PC, and every
+student can import it straight away.
+
+1. On the server PC, open `http://localhost:8080/__packages` (or *Python packages →* on the exam
+   control page).
+2. Type the name used with `pip install` (`faker`, or `pip install faker pyjokes`) and press **Add**.
+   The server downloads it from PyPI with the packages it needs, and shows what students write:
+   `import faker`.
+3. Students just import it. The Python IDE and Jupyter install it by themselves at the next run or
+   cell, also in pages that were already open and during an exam: no reload, and no internet on the
+   students' PCs. In Jupyter, `%pip install faker` works too, offline.
+
+* **No internet on the server PC:** on another PC, download the package's file ending in
+  `-none-any.whl` from its page on pypi.org (*Download files*), with the files of the packages it
+  needs, and drop them on the page.
+* **Only pure-Python packages** can be added. Packages with compiled code run in a browser only when
+  Pyodide includes them, and all of those (NumPy, pandas, SciPy, scikit-learn, Matplotlib, OpenCV …)
+  are in the lab already: the page says so and names the import (`sklearn`, `cv2`).
+* **Removing** a package stops new installs. A page that has already imported it keeps it until it
+  is reloaded.
+* The packages are kept in `packages/` next to `web/`, so running setup again does not lose them:
+  the server puts them back into the lab's lists when it starts, and every minute.
+
+**Several lab servers:** on each server's packages page, list the other servers
+(`192.168.1.11:8080, 192.168.1.12:8080`). The list may include the server's own address, which is
+skipped, so the same list can go on every server. A package added or removed on one server is copied
+to the others within seconds (each server tells the others), and every minute anyway. So only one
+server needs internet, and a server that was off catches up when it starts. The newest change to a
+package wins, so keep the servers' clocks right. A server copies only from the servers in its list.
 
 ## Exam mode
 
@@ -447,7 +479,10 @@ server/exam-helper.vbs     exam helper for the student PCs (served at /exam-help
 server/similarity.py       merging several servers' zips, and the similarity check (also a command-line tool)
 server/exam-merge.html     Merge and check similarity page (/__exam/merge, server PC only)
 server/similarity-report.html  the report's page; the check fills in its data
+server/packages.py         Python packages added while the labs run, and sharing them with the other servers
+server/packages.html       Python packages page (/__packages, server PC only)
 submissions/               the students' exam work, one folder per exam   (created in exams)
+packages/                  the added Python packages: registry.json and wheels/   (created when one is added)
 tools/setup.py             downloads and patches all third-party runtimes into web/
 tools/javasdk.py           repairs the TeaVM javac class library (TeaVM @Rename/@Remove)
 tools/make_brand.py        cuts the ADtU logo into web assets
@@ -500,6 +535,12 @@ To move the lab to another server, copy the whole folder (after setup) — no in
   * Files in the folders setup manages are kept by browsers for 30 days without asking: `runtimes/`, `vendor/` and `apps/notebook|office|drawio|circuit/`.
   * Every page sets a `foct_rt` cookie, a hash of the `.foct-version` markers. Those files are sent with `Vary: Cookie`, so when setup installs a new version, browsers fetch the new files instead of mixing versions.
   * If you hand-edit a file inside those folders, add it to `OWN_IN_MANAGED`.
+* Added Python packages (`server/packages.py`): the server writes them, marked `added`, into
+  `web/runtimes/pywheels/index.json` (the Python IDE installs from it) and, marked `foct_added`, into
+  `web/apps/notebook/pypi/all.json` (Jupyter's offline pip index), and copies their wheels next to
+  them. Both lists are in `OWN_IN_MANAGED`, so open labs see a new package at once. In the notebook
+  kernel, `KERNEL_HINTS` (in `tools/setup.py`) installs imported packages from the first list, and
+  makes piplite read its list again when a name is missing from it.
 
 ## Licences
 
