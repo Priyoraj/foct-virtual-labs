@@ -175,25 +175,32 @@ function viewPairs() {
     ${MANY_MEDIUM && !filt.levels.has("medium") ? `<span class="muted small">${count("medium")} Medium pairs are not shown: so many usually means a standard solution. Tick Medium to see them.</span>` : ""}</div>
     <div class="scroll"><table><thead><tr><th>Level</th><th>Similarity</th><th>Lab</th><th>Student A</th><th>Student B</th><th>A's code in B</th><th>B's code in A</th><th>Matching lines</th><th>How</th><th>Your decision</th></tr></thead>
     <tbody id="rows"></tbody></table></div>`;
-  $("fLab").onchange = (e) => { filt.lab = e.target.value; rows(); };
-  $("fQ").oninput = (e) => { filt.q = e.target.value.trim().toLowerCase(); rows(); };
-  $("view").querySelectorAll("[data-l]").forEach((c) => c.onchange = () => { c.checked ? filt.levels.add(c.dataset.l) : filt.levels.delete(c.dataset.l); rows(); });
+  $("fLab").onchange = (e) => { filt.lab = e.target.value; shownMax = PAGE_ROWS; rows(); };
+  $("fQ").oninput = (e) => { filt.q = e.target.value.trim().toLowerCase(); shownMax = PAGE_ROWS; rows(); };
+  $("view").querySelectorAll("[data-l]").forEach((c) => c.onchange = () => { c.checked ? filt.levels.add(c.dataset.l) : filt.levels.delete(c.dataset.l); shownMax = PAGE_ROWS; rows(); });
   rows();
 }
+// A big class can have thousands of pairs: draw them a page at a time, strongest first.
+const PAGE_ROWS = 300;
+let shownMax = PAGE_ROWS;
 function shownPairs() {
   return P.map((p, i) => [p, i]).filter(([p]) => (!filt.lab || p.bucket === filt.lab) && filt.levels.has(p.level)
     && (!filt.q || [S[p.a], S[p.b]].some((s) => (s.name + " " + s.enrolment).toLowerCase().includes(filt.q))));
 }
 function rows() {
   const list = shownPairs();
-  $("rows").innerHTML = list.length ? list.map(([p, i]) => `<tr class="click" data-i="${i}">
+  const more = list.length - shownMax;
+  $("rows").innerHTML = list.length ? list.slice(0, shownMax).map(([p, i]) => `<tr class="click" data-i="${i}">
       <td>${lvTag(p.level)}</td><td>${meter(p.score)}</td><td>${esc(lab(p.bucket))}</td>
       <td class="who"><b>${esc(S[p.a].name)}</b><span>${esc(S[p.a].enrolment)}</span>${alertCount(p.a)}</td>
       <td class="who"><b>${esc(S[p.b].name)}</b><span>${esc(S[p.b].enrolment)}</span>${alertCount(p.b)}</td>
       <td>${pct(p.pa)}</td><td>${pct(p.pb)}</td><td>${p.lines_a} / ${p.lines_b}</td><td>${howTags(p)}</td>
       <td class="dec ${decOf(p)}">${DEC[decOf(p)]}</td></tr>`).join("")
+      + (more > 0 ? `<tr class="noprint"><td colspan="10"><button class="b" id="moreRows">Show ${Math.min(more, PAGE_ROWS)} more</button>
+        <span class="muted small">${more} more pair${more === 1 ? "" : "s"} below; the strongest are shown first.</span></td></tr>` : "")
     : `<tr><td colspan="10" class="muted">No pairs at these levels. ${P.length ? "Tick more levels above." : "No two students' work is similar enough to list."}</td></tr>`;
   $("rows").querySelectorAll("tr[data-i]").forEach((tr) => tr.onclick = () => openPair(+tr.dataset.i, list.map(([, i]) => i)));
+  if ($("moreRows")) $("moreRows").onclick = () => { shownMax += PAGE_ROWS; rows(); };
 }
 
 // ---------------------------------------------------------------- students
@@ -203,18 +210,10 @@ function bestOf(s) {
   return best;
 }
 function viewStudents() {
-  const groupOf = {};
-  D.groups.forEach((g, n) => g.members.forEach((m) => { groupOf[m] = groupOf[m] || `Group ${n + 1}`; }));
-  const files = {};
-  D.identical.forEach((g) => g.files.forEach((f) => { files[f.student] = (files[f.student] || 0) + 1; }));
-  const rowsS = S.map((s, i) => {
-    const p = bestOf(i);
-    const worst = P.filter((q) => q.a === i || q.b === i).reduce((w, q) => DEC_RANK[decOf(q)] > DEC_RANK[w] ? decOf(q) : w, "");
-    return { s, i, p, worst, group: groupOf[i] || "", files: files[i] || 0 };
-  }).sort((x, y) => (y.p ? y.p.score : -1) - (x.p ? x.p.score : -1) || x.s.name.localeCompare(y.s.name));
+  const rowsS = studentRows();
   $("view").innerHTML = `<p class="muted small">Each student's closest match. A student in a group shares work with two or more others. “Your decision” is the strongest decision you recorded on any of their pairs.</p>
     <div class="scroll"><table><thead><tr><th>Student</th><th>Highest level</th><th>Similarity</th><th>With</th><th>Lab</th><th>Group</th><th>Identical files</th><th>Exam alerts</th><th>Servers</th><th>Your decision</th></tr></thead><tbody>
-    ${rowsS.map(({ s, i, p, worst, group, files: f }) => `<tr ${p ? `class="click" data-i="${P.indexOf(p)}"` : ""}>
+    ${rowsS.map(({ s, i, p, at, worst, group, files: f }) => `<tr ${p ? `class="click" data-i="${at}"` : ""}>
       <td class="who"><b>${esc(s.name)}</b><span>${esc(s.enrolment)}</span></td>
       <td>${p ? lvTag(p.level) : '<span class="muted">—</span>'}</td><td>${p ? meter(p.score) : ""}</td>
       <td>${p ? esc(S[p.a === i ? p.b : p.a].name) : ""}</td><td>${p ? esc(lab(p.bucket)) : esc(s.labs.map(lab).join(", "))}</td>
@@ -559,15 +558,24 @@ class PdfDoc {
 const howText = (p) => [p.identical ? "identical" : p.names != null && p.names >= 0.85 && (p.texts == null || p.texts >= 0.8) ? "same names"
   : p.names != null && p.names <= 0.5 ? "names changed" : "", p.moved ? "moved" : "", p.comments.length ? `${p.comments.length} same comment${p.comments.length > 1 ? "s" : ""}` : "",
   p.short ? "short" : ""].filter(Boolean).join(", ");
+// A PDF for the marks file stays readable for a big class: at most this many pair rows, and the matching
+// work of every pair with a decision plus the strongest pairs up to PDF_DETAIL_MAX.
+const PDF_PAIRS_MAX = 2000, PDF_DETAIL_MAX = 150;
 function studentRows() {                          // one row per student, most similar first (as in Students)
   const groupOf = {}, files = {};
   D.groups.forEach((g, n) => g.members.forEach((m) => { groupOf[m] = groupOf[m] || `Group ${n + 1}`; }));
   D.identical.forEach((g) => g.files.forEach((f) => { files[f.student] = (files[f.student] || 0) + 1; }));
-  return S.map((s, i) => {
-    const p = bestOf(i);
-    const worst = P.filter((q) => q.a === i || q.b === i).reduce((w, q) => DEC_RANK[decOf(q)] > DEC_RANK[w] ? decOf(q) : w, "");
-    return { s, i, p, worst, group: groupOf[i] || "", files: files[i] || 0 };
-  }).sort((x, y) => (y.p ? y.p.score : -1) - (x.p ? x.p.score : -1) || x.s.name.localeCompare(y.s.name));
+  // one pass over the pairs (a class of 500 can have tens of thousands of them)
+  const best = new Array(S.length).fill(null), bestAt = new Array(S.length).fill(-1), worst = new Array(S.length).fill("");
+  P.forEach((q, k) => {
+    const d = decOf(q);
+    for (const i of [q.a, q.b]) {
+      if (!best[i] || q.score > best[i].score) { best[i] = q; bestAt[i] = k; }
+      if (DEC_RANK[d] > DEC_RANK[worst[i]]) worst[i] = d;
+    }
+  });
+  return S.map((s, i) => ({ s, i, p: best[i], at: bestAt[i], worst: worst[i], group: groupOf[i] || "", files: files[i] || 0 }))
+    .sort((x, y) => (y.p ? y.p.score : -1) - (x.p ? x.p.score : -1) || x.s.name.localeCompare(y.s.name));
 }
 async function downloadPdf() {
   const btn = $("pdfBtn");
@@ -586,8 +594,8 @@ async function downloadPdf() {
     [`Each pair compares two students' work in one lab. "A's code in B" is how much of student A's own code is also in student B's work.`,
      "Levels: Very high 80% and more, almost the same work; High 60-79%, large parts are the same; Medium 40-59%, some parts are the same; Low 25-39%, small overlaps, usually no concern.",
      "Names of variables, numbers, texts, comments and spacing do not count for the percentage, so renaming things does not hide copying, and neither does moving parts around.",
-     (D.settings.base.length ? `Code from the files given to the students (${D.settings.base.join(", ")}) does not count, nor does ` : "Standard code that many students have does not count, nor does ")
-       + (D.settings.base.length ? "standard code that many students have, " : "") + "unless it is part of a longer stretch the two students alone share.",
+     (D.settings.base.length ? `Code from the files given to the students (${D.settings.base.join(", ")}) does not count, nor does standard code that many students have, `
+       : "Standard code that many students have does not count, ") + "unless it is part of a longer stretch the two students alone share.",
      "Similarity is evidence, not proof: the report cannot tell who copied from whom. Look at the matching parts and ask the students to explain their work."]
       .forEach((t) => doc.bullet(t, { size: 9 }));
 
@@ -598,14 +606,17 @@ async function downloadPdf() {
         p ? pct(p.score) : "", p ? S[p.a === i ? p.b : p.a].name : "", p ? lab(p.bucket) : s.labs.map(lab).join(", "), group, files ? String(files) : "",
         { t: s.alerts.join("; "), color: LVCOL.high }, { t: worst ? DEC[worst] : "", font: "F2" }]), { size: 7.8 });
 
-    const listed = shownPairs().map(([p]) => p);
-    doc.heading(`Pairs (${listed.length}: ${[...filt.levels].map((l) => LV[l]).join(", ")}${filt.lab ? ", " + lab(filt.lab) : ""})`, 13);
+    const listedAll = shownPairs().map(([p]) => p);
+    const listed = listedAll.slice(0, PDF_PAIRS_MAX);
+    doc.heading(`Pairs (${listedAll.length}: ${[...filt.levels].map((l) => LV[l]).join(", ")}${filt.lab ? ", " + lab(filt.lab) : ""})`, 13);
     if (listed.length) {
       doc.table([{ t: "Level", w: 1.3 }, { t: "Similarity", w: 0.85 }, { t: "Lab", w: 1.15 }, { t: "Student A", w: 2.2 }, { t: "Student B", w: 2.2 }, { t: "A's code in B", w: 0.8 },
                  { t: "B's code in A", w: 0.8 }, { t: "Lines", w: 0.7 }, { t: "How", w: 1.45 }, { t: "Decision", w: 1.45 }],
         listed.map((p) => { const d = decisions[pairKey(p)] || {};
           return [{ t: LV[p.level], badge: LVCOL[p.level] }, pct(p.score), lab(p.bucket), `${S[p.a].name}\n${S[p.a].enrolment}`, `${S[p.b].name}\n${S[p.b].enrolment}`,
                   pct(p.pa), pct(p.pb), `${p.lines_a} / ${p.lines_b}`, howText(p), { t: (d.d ? DEC[d.d] : "") + (d.n ? (d.d ? ": " : "") + d.n : ""), font: d.d ? "F2" : "F1" }]; }), { size: 7.6 });
+      if (listedAll.length > listed.length)
+        doc.para(`The ${listedAll.length - listed.length} weaker pairs after these are listed in the report itself (similarity-report.html) and its CSV.`, { size: 9, color: MUTED });
     } else doc.para("No pairs at these levels.", { color: MUTED });
 
     if (D.groups.length) {
@@ -622,12 +633,21 @@ async function downloadPdf() {
     doc.table([{ t: "Lab", w: 1.4 }, { t: "Students", w: 0.8 }, { t: "Standard code is code that more than", w: 1.8 }, { t: "Given code", w: 0.9 }, { t: "Standard code", w: 0.9 }],
       Object.values(D.labs).map((l) => [l.name, String(l.students), `${l.most} of them have`, pct(l.given), pct(l.standard)]), { size: 8 });
 
-    // the matching work: every Very high and High pair, and every pair with a decision
-    const detail = P.filter((p) => p.level === "vhigh" || p.level === "high" || decOf(p));
+    // the matching work: every pair with a decision, and the strongest Very high and High pairs
+    const strong = P.filter((p) => p.level === "vhigh" || p.level === "high");
+    const chosen = new Set(P.filter((p) => decOf(p)));
+    for (const p of strong) {
+      if (chosen.size >= PDF_DETAIL_MAX) break;
+      chosen.add(p);
+    }
+    const detail = P.filter((p) => chosen.has(p));
+    const notShown = strong.filter((p) => !chosen.has(p)).length;
     if (detail.length) {
       doc.newPage();
       doc.heading("The matching work, pair by pair", 15, 0);
-      doc.para("Each matching part is shown for both students, with its line numbers, in the same colour.", { size: 8.5, color: MUTED, after: 6 });
+      doc.para("Each matching part is shown for both students, with its line numbers, in the same colour." +
+        (notShown ? ` Shown here: every pair with a decision and the strongest pairs; the matching work of ${notShown} more Very high and High pairs is in the report itself.` : ""),
+        { size: 8.5, color: MUTED, after: 6 });
     }
     detail.forEach((p, n) => {
       const A = S[p.a], B = S[p.b], da = D.docs[p.da], db = D.docs[p.db], dec = decisions[pairKey(p)] || {};

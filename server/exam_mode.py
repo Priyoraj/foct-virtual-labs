@@ -63,6 +63,8 @@ NEEDS = [   # URL prefix -> the labs that use it (first match wins)
     ("/runtimes/spice/", {"spice"}), ("/runtimes/wiregasm/", {"packets"}),
 ]
 AGENT_STALE = 20                       # seconds without a beat before a PC's exam helper counts as stopped
+SAVE_EVERY = 0.5                       # the state is written to disk at most this often, in the background
+                                       # (500 exam helpers check in about 170 times a second)
 # Programs the exam helper closes (and keeps closed) on the student's PC. The teacher can change the list.
 HELPER_KILL = ("notepad.exe, notepad++.exe, wordpad.exe, write.exe, code.exe, devenv.exe, sublime_text.exe, atom.exe, "
                "pycharm64.exe, idea64.exe, eclipse.exe, netbeans64.exe, codeblocks.exe, devcpp.exe, winword.exe, "
@@ -215,6 +217,8 @@ class ExamMode:
                       "timeup": False, "opts": dict(OPTS), "message": None}
         self.students = {}        # token -> record
         self.agents = {}          # exam helper token -> {ip, pc, user, kiosk, beat, status ...}
+        self._ip_agent = {}       # PC address -> its exam helper's token (a PC has one helper at a time)
+        self._dirty = False
         try:
             saved = json.loads(self.state_file.read_text(encoding="utf-8"))
             for k in self.state:
@@ -229,7 +233,10 @@ class ExamMode:
                     self.students = roster.get("students", {})
         except (OSError, ValueError, AttributeError, TypeError):
             pass
+        for t, a in sorted(self.agents.items(), key=lambda kv: kv[1].get("beat", 0)):
+            self._ip_agent[a.get("ip")] = t
         self._ranges = self._safe_ranges(self.state["allow"])
+        threading.Thread(target=self._save_loop, name="exam-state-writer", daemon=True).start()
 
     # ------------------------------------------------------------ helpers (call with the lock held)
     @staticmethod
@@ -242,21 +249,47 @@ class ExamMode:
     def exam_dir(self):
         return self.root / self.state["folder"]
 
-    def _save(self):
-        try:
-            self.state_file.write_text(json.dumps(dict(self.state, agents=self.agents)), encoding="utf-8")
-        except OSError:
-            pass
-        if self.state["folder"]:
+    def _save(self, now=False):
+        """Mark the state as changed (lock held). A background thread writes it within SAVE_EVERY seconds,
+        so a busy exam does not write the whole roster to disk on every check-in; now=True writes at once."""
+        self._dirty = True
+        if now:
+            self.flush()
+
+    def _save_loop(self):
+        while True:
+            time.sleep(SAVE_EVERY)
             try:
-                self.exam_dir().mkdir(parents=True, exist_ok=True)
-                tmp = self.exam_dir() / ".exam.json.tmp"
-                tmp.write_text(json.dumps({"id": self.state["id"], "title": self.state["title"],
-                                           "since": self.state["since"], "students": self.students}, indent=1),
-                               encoding="utf-8")
-                os.replace(tmp, self.exam_dir() / ".exam.json")
+                self.flush()
+            except Exception:  # noqa: BLE001 - never let the writer thread die
+                pass
+
+    def flush(self):
+        """Write the state and the exam's roster to disk if they changed."""
+        with self.lock:
+            if not self._dirty:
+                return
+            self._dirty = False
+            state = json.dumps(dict(self.state, agents=self.agents))
+            folder = self.exam_dir() if self.state["folder"] else None
+            if folder and not self.state["on"] and not folder.is_dir():
+                folder = None                         # an ended exam's folder that the teacher deleted stays deleted
+            roster = json.dumps({"id": self.state["id"], "title": self.state["title"],
+                                 "since": self.state["since"], "students": self.students}) if folder else None
+            try:
+                tmp = self.state_file.with_name(self.state_file.name + ".tmp")
+                tmp.write_text(state, encoding="utf-8")
+                os.replace(tmp, self.state_file)
             except OSError:
                 pass
+            if folder:
+                try:
+                    folder.mkdir(parents=True, exist_ok=True)
+                    tmp = folder / ".exam.json.tmp"
+                    tmp.write_text(roster, encoding="utf-8")
+                    os.replace(tmp, folder / ".exam.json")
+                except OSError:
+                    pass
 
     def _new_folder(self, title):
         base = safe_name(title, fallback="Exam " + time.strftime("%Y-%m-%d %H-%M"))
@@ -329,6 +362,7 @@ class ExamMode:
                          ends_at=now + int(minutes) * 60 if int(minutes or 0) > 0 else None)
                 self.students = {}
                 self.agents = {}
+                self._ip_agent = {}
                 s["folder"] = self._new_folder(title) if s["register"] else None
                 s["code"] = f"{secrets.randbelow(9000) + 1000}" if code else None
             elif on:                                   # changes during the exam
@@ -353,7 +387,7 @@ class ExamMode:
             if on:
                 s["labs"], s["allow"], s["opts"] = labs, str(allow or "").strip()[:500], o
                 self._ranges = ranges
-            self._save()
+            self._save(now=True)                       # starting, changing and ending an exam are written at once
             return dict(s)
 
     def add_time(self, minutes):
@@ -594,13 +628,10 @@ class ExamMode:
     # ------------------------------------------------------------ exam helper (exam-helper.vbs on the PC)
     def _agent_for(self, ip):
         """The running exam helper of this PC (lock held), or None."""
-        now = time.time()
-        best = None
-        for ag in self.agents.values():
-            if ag["ip"] == ip and not ag.get("gone") and now - ag["beat"] < AGENT_STALE:
-                if not best or ag["beat"] > best["beat"]:
-                    best = ag
-        return best
+        ag = self.agents.get(self._ip_agent.get(ip, ""))
+        if ag and not ag.get("gone") and time.time() - ag["beat"] < AGENT_STALE:
+            return ag
+        return None
 
     def _students_on(self, ip):
         return [r for r in self.students.values() if (r.get("ip_now") or r["ip"]) == ip]
@@ -632,6 +663,7 @@ class ExamMode:
                 del self.agents[t]
             token = secrets.token_urlsafe(18)
             now = time.time()
+            self._ip_agent[ip] = token
             self.agents[token] = {"ip": ip, "pc": pc, "user": re.sub(r"[^\w .\-@]", "", str(info.get("user") or ""))[:40],
                                   "version": str(info.get("version") or "")[:10], "kiosk": kiosk, "first": now,
                                   "beat": now, "status": {"ready": False},

@@ -45,6 +45,42 @@ Office 19 MB). If 90 PCs open Jupyter for the first time together, this takes ab
 gigabit. In a test, the server sent 90 simultaneous clients about 885 MB/s, so the network is the
 limit, not the server.
 
+### 500 PCs
+
+Measured with `tools/loadtest.py` on an Intel i5 laptop. The server and the simulated PCs ran on the
+same machine, so these numbers show what the server software can do, not the network:
+
+| Test (500 PCs at the same moment) | Result |
+|---|---|
+| Open the C lab, empty caches (44 files, 14.4 GB in all) | all done in 38 s, no errors |
+| Open the C lab, already cached (22,000 "not modified" replies) | 13 s, no errors |
+| Open the home page, empty caches | 10 s, no errors |
+| An exam for 3 minutes: 500 exam helpers checking in every 3 s, students polling every 8 s and sending work every minute (40,000 requests) | no errors; median reply 6 to 11 ms, 99% under 0.7 s; all 500 signed in |
+| Similarity check of 500 students (C and Python) | 31 s; the report opens in under a second |
+
+What made 500 work:
+* Windows queues only about 200 incoming connections; the server now asks for 4096, so a lab
+  opening together waits instead of being refused.
+* Exam state is written to disk in the background at most twice a second, instead of on every
+  check-in. Before, the same exam test took median replies of 9 to 20 seconds, too slow for the
+  safeguards.
+* Each PC's exam helper is found directly, file lookups are cached for 2 seconds, and the report shows pairs 300 at a time.
+
+The network decides the rest. One gigabit link carries about 110 MB/s, so 500 PCs opening the C
+lab with empty caches (29 MB each) need about 2 minutes, and Jupyter (49 MB) about 4. **In an exam
+every PC fetches its lab's files from the server once at the start, cached or not**, because that
+is how the server enforces the exam's rules. For 500 PCs:
+* Best: one server per lab room (about 100 PCs each), each wired to that room's switch. For one
+  exam across rooms, start it on every server with the same title, options and code, list the other
+  servers under *The lab's other servers* (the exam helper moves PCs if one stops), and merge the
+  zips afterwards for one similarity report.
+* Or one server with a 10 Gb/s link, on a switch whose uplinks are 10 Gb/s too.
+* Let students sign in over a few minutes rather than all in the same second.
+
+Test your own network before the first big exam:
+`python tools/loadtest.py lab --pcs 500 --lab c --server http://<server>:8080` from a PC in the lab,
+and `python tools/loadtest.py exam --pcs 500` on the server PC (it refuses to run during an exam).
+
 ## Requirements
 
 * **Server:** any Windows/Linux/macOS PC on the lab network with **Python 3.8+**. The lab itself
@@ -416,6 +452,7 @@ tools/setup.py             downloads and patches all third-party runtimes into w
 tools/javasdk.py           repairs the TeaVM javac class library (TeaVM @Rename/@Remove)
 tools/make_brand.py        cuts the ADtU logo into web assets
 tools/make_captures.py     makes the Packet Analyzer's example captures
+tools/loadtest.py          simulates many PCs opening a lab, or taking an exam, to test a server and its network
 tools/jupyterlite/         JupyterLite config and starter notebook
 tools/office/              blank Word/Excel/PowerPoint templates
 web/index.html, help.html  portal and help

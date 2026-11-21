@@ -132,6 +132,41 @@ def add_exam_tag(page):
     return page[:at] + EXAM_TAG + page[at:]
 
 
+# File lookups (resolving the path, stat, which compressed copy to send) are kept for a moment: when a
+# whole lab opens a page together, hundreds of PCs ask for the same files within a second or two, and
+# on Windows each lookup costs several system calls. Edited files still show within META_TTL seconds.
+META_TTL = 2.0
+_META = {}
+
+
+def cached(key, compute):
+    now = time.monotonic()
+    hit = _META.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    value = compute()
+    if len(_META) > 20000:
+        _META.clear()
+    _META[key] = (now + META_TTL, value)
+    return value
+
+
+def file_meta(target, want_br, want_gzip):
+    """(stat, encoding, path to send, its size) for a static file; raises OSError when it is missing."""
+    st = target.stat()
+    for enc, ext, wanted in (("br", ".br", want_br), ("gzip", ".gz", want_gzip)):
+        if not wanted:
+            continue
+        cand = target.with_name(target.name + ext)
+        try:
+            cs = cand.stat()
+        except OSError:
+            continue
+        if not os.path.isdir(cand) and cs.st_mtime >= st.st_mtime - 1:     # a stale copy is never sent
+            return st, enc, cand, cs.st_size
+    return st, None, target, st.st_size
+
+
 EXAM = ExamMode(EXAM_FILE, SUBMISSIONS)
 ST_COOKIE = "foct_st"     # the signed-in student's token, so the server knows which PC may use the labs
 
@@ -252,10 +287,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/__exam/merge"):
                 return self.merge_get(path, url.query, head)
             return self.send_simple(404, "Not found", head=head, page=True)
-        target = self.resolve(path)
+        target = cached(("resolve", str(self.web_root), path), lambda: self.resolve(path))
         if target is None:
             return self.send_simple(404, "Not found", head=head, page=True)
-        if target.is_dir():
+        if cached(("isdir", str(target)), target.is_dir):
             if not path.endswith("/"):
                 loc = path + "/" + (("?" + url.query) if url.query else "")
                 self.send_response(301)
@@ -264,7 +299,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 return
             target = target / "index.html"
-            if not target.is_file():
+            if not cached(("isfile", str(target)), target.is_file):
                 return self.send_simple(404, "Not found", head=head, page=True)
         if not self.is_loopback():                    # the server PC itself is never held back
             page = MIME.get(target.suffix.lower(), "").startswith("text/html") and self.wants_page()
@@ -314,17 +349,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         encoding, send_path, page = None, target, None
         accept = self.headers.get("Accept-Encoding", "")
         try:
-            st = target.stat()
             if ctype.startswith("text/html") and self.wants_page():
-                page = add_exam_tag(target.read_bytes())   # small, sent uncompressed
+                st = cached(("stat", str(target)), target.stat)
+                # small, sent uncompressed, with the exam script added
+                page = cached(("page", str(target), st.st_mtime, st.st_size), lambda: add_exam_tag(target.read_bytes()))
+                size = len(page)
             else:
-                for enc, ext in (("br", ".br"), ("gzip", ".gz")):
-                    if enc in accept:
-                        cand = target.with_name(target.name + ext)
-                        if cand.is_file() and cand.stat().st_mtime >= st.st_mtime - 1:
-                            encoding, send_path = enc, cand
-                            break
-            size = len(page) if page is not None else send_path.stat().st_size
+                want = ("br" in accept, "gzip" in accept)
+                st, encoding, send_path, size = cached(("meta", str(target)) + want, lambda: file_meta(target, *want))
         except OSError:
             return self.send_simple(404, "Not found", head=head, page=True)
 
@@ -788,8 +820,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 class LabServer(http.server.ThreadingHTTPServer):
     daemon_threads = True
-    request_queue_size = 256
+    # 500 PCs opening a lab together make about 3000 connections in a second or two. They must wait in the
+    # queue rather than be refused (a refused file leaves that PC's lab half loaded).
+    request_queue_size = 4096
     allow_reuse_address = True
+
+    def server_activate(self):
+        if sys.platform == "win32":
+            # Windows queues only about 200 connections unless the backlog is given as SOMAXCONN_HINT(n),
+            # a negative number that Python's listen() does not pass on.
+            try:
+                import ctypes
+                listen = ctypes.windll.ws2_32.listen
+                listen.argtypes = [ctypes.c_size_t, ctypes.c_int]
+                if listen(self.socket.fileno(), -self.request_queue_size) == 0:
+                    return
+            except (OSError, AttributeError, ValueError):
+                pass
+        self.socket.listen(self.request_queue_size)
 
     def handle_error(self, request, client_address):
         exc = sys.exc_info()[1]

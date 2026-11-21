@@ -156,6 +156,13 @@ python server/serve.py --https    (also serve secure mode on port 8443)</pre>
       <li>Runtimes are downloaded again only after <code>tools/setup.py</code> installs a new version.</li>
       <li>After the PCs are re-imaged, open each lab once on every PC before class.</li>
     </ul>
+    <p><b>Very large labs (up to 500 PCs):</b> the server was tested with 500 simulated PCs at once. Opening the C lab together took 38&nbsp;seconds with empty caches and 13 with full ones. A 3-minute exam with 500 exam helpers and students sending work had no errors, with replies in about 10&nbsp;ms. The limit is the network: one gigabit link needs about 2&nbsp;minutes to send the C lab to 500 PCs with empty caches, and in an exam every PC fetches its lab once at the start.</p>
+    <ul>
+      <li>Best: one server per lab room (about 100 PCs each), wired to that room&rsquo;s switch. For one exam across rooms, start it on every server with the same title, options and code, list the other servers under <i>The lab&rsquo;s other servers</i>, and merge the zips afterwards.</li>
+      <li>Or one server with a 10&nbsp;Gb/s link, on a switch whose uplinks are 10&nbsp;Gb/s too.</li>
+      <li>Let students sign in over a few minutes rather than all at once.</li>
+      <li>To test your own network, run <code>python tools/loadtest.py lab --pcs 500 --lab c --server http://&lt;server&gt;:8080</code> from a lab PC, and <code>python tools/loadtest.py exam --pcs 500</code> on the server PC when no exam is running.</li>
+    </ul>
     <p><b>Exam mode:</b> on the server PC, open <code>http://localhost:8080/__exam/control</code>, type the exam title and press <b>Start exam mode</b>. Within about 10&nbsp;seconds every lab page (Jupyter, Office and draw.io included):</p>
     <ul>
       <li>turns off copy, cut and paste, and blocks dragging text or files in;</li>
