@@ -9,6 +9,7 @@
   :root { color-scheme: light dark; --navy: #342e6c; --red: #dc2626; --bg: #f5f4fb; --card: #fff; --line: #e3e1f2; --text: #1d1b33; --muted: #6b6890; --ok: #15803d; --warn: #b45309; }
   @media (prefers-color-scheme: dark) { :root { --bg: #15142a; --card: #1f1d3a; --line: #34325c; --text: #ecebf8; --muted: #a9a6cf; --ok: #4ade80; --warn: #fbbf24; } }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }   /* .check sets display, which would otherwise show the hidden row */
   body { margin: 0; font: 15px/1.5 "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
   main { max-width: 900px; margin: 28px auto; padding: 0 16px; }
   header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
