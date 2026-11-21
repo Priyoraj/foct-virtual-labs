@@ -1,4 +1,4 @@
-# Third-party runtimes and apps: tools/setup.py downloads and builds them (about 860 MB).
+# Third-party runtimes and apps: tools/setup.py downloads and builds them (about 900 MB).
 # After cloning, run:  python tools/setup.py
 /.downloads/
 /.build/
@@ -11,6 +11,7 @@
 /web/runtimes/lexyacc/
 /web/runtimes/viz/
 /web/runtimes/pywheels/
+/web/runtimes/wiregasm/
 /web/runtimes/javabox/javabox-direct.*
 /web/runtimes/javabox/LICENSE
 /web/vendor/monaco/

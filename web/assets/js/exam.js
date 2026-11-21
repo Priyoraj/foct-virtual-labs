@@ -76,7 +76,7 @@
       const l = new URLSearchParams(search || "").get("lang");
       return CODE_LABS.includes(l) ? l : "c";
     }
-    const m = /^\/apps\/(notebook|sql|mongo|cdtools|spice|circuit|netsim|drawio|office)\//.exec(pathname);
+    const m = /^\/apps\/(notebook|sql|mongo|cdtools|spice|circuit|netsim|packets|drawio|office)\//.exec(pathname);
     return m ? (m[1] === "notebook" ? "jupyter" : m[1]) : null;
   }
   const PAGE_LAB = labOf(location.pathname, location.search);

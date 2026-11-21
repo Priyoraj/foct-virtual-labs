@@ -1,0 +1,101 @@
+[
+ {
+  "file": "arp-ping.pcap",
+  "title": "ARP and ping on the lab network",
+  "description": "LAB-PC-37 finds the hardware address of LAB-PC-38 with ARP, pings it four times, then tries an address no PC has.",
+  "packets": 13,
+  "filters": [
+   "arp",
+   "icmp",
+   "icmp.type == 8",
+   "eth.dst == ff:ff:ff:ff:ff:ff"
+  ],
+  "questions": [
+   "What MAC address does LAB-PC-38 have, and which company made its network card?",
+   "How long did the first ping take to come back (look at the Time column)?",
+   "Why does the PC send three ARP requests at the end, and why is there no ping after them?"
+  ]
+ },
+ {
+  "file": "dns-http.pcap",
+  "title": "A web page: DNS, TCP and HTTP",
+  "description": "The PC looks up labs.foct.test, opens a TCP connection to port 80 and loads a page, its logo and a missing favicon.",
+  "packets": 22,
+  "filters": [
+   "dns",
+   "tcp.flags.syn == 1",
+   "http.request",
+   "http.response.code == 404",
+   "tcp.stream eq 0"
+  ],
+  "questions": [
+   "Which IP address did DNS give for labs.foct.test, and how long may the PC keep it (TTL)?",
+   "Find the three packets of the TCP handshake. Which ports do the two sides use?",
+   "Follow the HTTP stream: what status code came back for /favicon.ico?",
+   "Use Statistics > HTTP objects to save the logo the page loaded."
+  ]
+ },
+ {
+  "file": "tcp-loss.pcap",
+  "title": "TCP: a lost segment and its retransmission",
+  "description": "A download of results.csv loses one segment. The PC sends duplicate ACKs and the server sends the segment again.",
+  "packets": 24,
+  "filters": [
+   "tcp.analysis.flags",
+   "tcp.analysis.duplicate_ack",
+   "tcp.analysis.retransmission || tcp.analysis.fast_retransmission"
+  ],
+  "questions": [
+   "Which packet shows that a segment was not captured?",
+   "How many duplicate ACKs did the PC send?",
+   "What sequence number did the retransmitted segment carry?"
+  ]
+ },
+ {
+  "file": "dhcp.pcap",
+  "title": "DHCP: a PC gets its address",
+  "description": "Discover, Offer, Request and Acknowledge, then the PC checks with ARP that nobody else uses its new address.",
+  "packets": 6,
+  "filters": [
+   "dhcp",
+   "dhcp.option.dhcp == 5",
+   "arp"
+  ],
+  "questions": [
+   "Which IP address, subnet mask, gateway and DNS server did the PC get?",
+   "How long is the lease?",
+   "Why are the DHCP messages sent to 255.255.255.255?"
+  ]
+ },
+ {
+  "file": "ftp-login.pcap",
+  "title": "FTP: a password in clear text",
+  "description": "A student logs in to an FTP server. FTP sends everything, the password included, as plain text.",
+  "packets": 29,
+  "filters": [
+   "ftp",
+   "ftp.request.command == \"PASS\"",
+   "tcp.port == 21"
+  ],
+  "questions": [
+   "Follow the TCP stream: what user name and password were sent?",
+   "Why should a lab use SFTP or FTPS instead of FTP?"
+  ]
+ },
+ {
+  "file": "tls-handshake.pcap",
+  "title": "HTTPS: what TLS keeps private",
+  "description": "The PC opens an HTTPS connection with TLS 1.3. The server name is visible in the Client Hello; the page itself is encrypted.",
+  "packets": 19,
+  "filters": [
+   "tls",
+   "tls.handshake.type == 1",
+   "tls.handshake.extensions_server_name"
+  ],
+  "questions": [
+   "Which server name (SNI) did the PC ask for?",
+   "Which cipher suite did the server choose?",
+   "Can you read the page or the request? Compare with the HTTP and FTP captures."
+  ]
+ }
+]

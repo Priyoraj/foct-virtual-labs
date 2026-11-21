@@ -2,6 +2,7 @@
 import { Network, TYPES, describe, layers, runCommand, ipToInt, parseMask, intToIp, maskToPrefix, prefixToMask } from "./engine.js";
 import { EXAMPLES } from "./examples.js";
 import { toast, modal, saveToDisk, pickFiles, downloadBlob, toggleTheme, escapeHtml, currentTheme } from "/assets/js/foct.js";
+import { writePcap } from "/assets/js/pcap.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const $ = (id) => document.getElementById(id);
@@ -651,6 +652,82 @@ function help() {
   });
 }
 
+// ------------------------------------------------------------------ packets as a capture file
+// The packet list written as real Ethernet frames, so the Packet Analyzer (or Wireshark) can open it.
+const ICMP_DATA = new TextEncoder().encode("abcdefghijklmnopqrstuvwabcdefghi");   // what Windows ping sends
+const macBytes = (m) => (m || "00:00:00:00:00:00").split(":").map((x) => parseInt(x, 16) || 0);
+const ipBytes = (n) => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+function csum(b) {
+  let s = 0;
+  for (let i = 0; i < b.length; i += 2) s += (b[i] << 8) + (b[i + 1] || 0);
+  while (s >> 16) s = (s & 0xffff) + (s >>> 16);
+  return ~s & 0xffff;
+}
+let ipId = 0x2400;
+function ipHeader(src, dst, ttl, len) {
+  ipId = (ipId + 1) & 0xffff;
+  const h = [0x45, 0, len >> 8, len & 255, ipId >> 8, ipId & 255, 0, 0, Math.max(0, Math.min(255, ttl)), 1, 0, 0, ...ipBytes(src), ...ipBytes(dst)];
+  const c = csum(h);
+  h[10] = c >> 8; h[11] = c & 255;
+  return h;
+}
+function icmpBytes(ic, p) {
+  const echo = ic.type === "echo-request" || ic.type === "echo-reply";
+  const type = { "echo-request": 8, "echo-reply": 0, "time-exceeded": 11, unreachable: 3 }[ic.type] ?? 8;
+  const code = ic.type === "unreachable" ? (ic.what === "net" ? 0 : 1) : 0;
+  let m;
+  if (echo) {
+    m = [type, code, 0, 0, (ic.id >> 8) & 255, ic.id & 255, (ic.seq >> 8) & 255, ic.seq & 255, ...ICMP_DATA];
+  } else {    // an error carries the start of the packet it is about
+    const a = ic.about || {};
+    const inner = [8, 0, 0, 0, ((a.id || 0) >> 8) & 255, (a.id || 0) & 255, ((a.seq || 0) >> 8) & 255, (a.seq || 0) & 255];
+    const ic2 = csum([...inner, ...ICMP_DATA]);
+    inner[2] = ic2 >> 8; inner[3] = ic2 & 255;
+    m = [type, code, 0, 0, 0, 0, 0, 0, ...ipHeader(a.src ?? p.dst, a.dst ?? p.src, a.ttl ?? 1, 20 + 8 + ICMP_DATA.length), ...inner];
+  }
+  const c = csum(m);
+  m[2] = c >> 8; m[3] = c & 255;
+  return m;
+}
+function frameBytes(fr) {
+  let body, type;
+  if (fr.type === "ARP") {
+    const a = fr.payload;
+    type = 0x0806;
+    body = [0, 1, 8, 0, 6, 4, 0, a.op === "request" ? 1 : 2, ...macBytes(a.senderMac), ...ipBytes(a.senderIp), ...macBytes(a.targetMac), ...ipBytes(a.targetIp)];
+  } else {
+    const p = fr.payload;
+    type = 0x0800;
+    const icmp = icmpBytes(p.data || {}, p);
+    body = [...ipHeader(p.src, p.dst, p.ttl, 20 + icmp.length), ...icmp];
+  }
+  const out = [...macBytes(fr.dst), ...macBytes(fr.src), type >> 8, type & 255, ...body];
+  while (out.length < 60) out.push(0);            // Ethernet's minimum frame size
+  return new Uint8Array(out);
+}
+
+async function savePcap() {
+  const dev = selected;
+  const list = events.filter((e) => !dev || e.from.device === dev || e.to.device === dev);
+  if (!list.length) {
+    toast(dev ? `${dev.name} has not sent or received any packets yet.` : "No packets yet: ping something first.");
+    return;
+  }
+  const t0 = Math.floor(Date.now() / 1000);
+  const seen = new Set();
+  const packets = [];
+  for (const e of list) {
+    // a frame passing through the selected device shows once, as on a single network card
+    const key = dev ? `${e.t}|${JSON.stringify(e.frame)}` : null;
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    packets.push({ time: t0 + e.t / 1000, data: frameBytes(e.frame) });     // one tick = 1 ms
+  }
+  const name = `${(dev ? dev.name : "network").replace(/[^\w.-]+/g, "_")}.pcap`;
+  const r = await saveToDisk(name, writePcap(packets), { mime: "application/vnd.tcpdump.pcap", description: "Capture file" });
+  if (r) toast(`Saved ${packets.length} packets as ${r.name}. Open it in the Packet Analyzer.`);
+}
+
 // ------------------------------------------------------------------ menu, keys, boot
 function initMenu() {
   const menu = $("menu"), btn = $("btnMore"), ex = $("examples");
@@ -666,7 +743,7 @@ function initMenu() {
     const cmd = e.target.closest("[data-cmd]")?.dataset.cmd;
     if (!cmd) return;
     menu.hidden = true;
-    ({ png: exportPng, help, theme: toggleTheme })[cmd]?.();
+    ({ png: exportPng, pcap: savePcap, help, theme: toggleTheme })[cmd]?.();
   });
   $("loadExample").onclick = (e) => { e.preventDefault(); loadExample(Object.keys(EXAMPLES)[1]); };
 }

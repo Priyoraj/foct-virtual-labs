@@ -6,3 +6,5 @@
 *.docx binary
 *.xlsx binary
 *.pptx binary
+*.pcap binary
+*.pcapng binary

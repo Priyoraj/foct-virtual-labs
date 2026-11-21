@@ -69,6 +69,7 @@
   .i-c { background: #3949ab; } .i-cpp { background: #283593; font-size: .95rem; }
   .i-java { background: #c0392b; font-size: .82rem; } .i-py { background: linear-gradient(135deg, #3572a5 50%, #f2c94c 50%); }
   .i-nb { background: #e8710a; } .i-draw { background: #f08705; } .i-net { background: #00897b; } .i-office { background: #2b579a; }
+  .i-pkt { background: #1a63b0; }
   .i-sql { background: #0e7490; } .i-spice { background: #7b1fa2; } .i-circuit { background: #2e7d32; }
   .i-mongo { background: #3d7a2a; font-size: 1.05rem; } .i-lex { background: #ad1457; font-size: .9rem; } .i-cd { background: #1565c0; }
 
@@ -115,7 +116,7 @@
 <section class="hero">
   <div class="wrap">
     <h1>Your computer lab, <em>in the browser</em>.</h1>
-    <p>Write and run <strong>C, C++, Java, Python, SQL and MongoDB</strong>, build scanners and parsers with lex and yacc, work in Jupyter notebooks, simulate circuits and networks, draw diagrams and edit office documents. Nothing to install, no login, and <strong>your files stay on your own computer</strong>.</p>
+    <p>Write and run <strong>C, C++, Java, Python, SQL and MongoDB</strong>, build scanners and parsers with lex and yacc, work in Jupyter notebooks, simulate circuits and networks, analyse network packets, draw diagrams and edit office documents. Nothing to install, no login, and <strong>your files stay on your own computer</strong>.</p>
     <div class="hero-meta">
       <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Runs on this PC's browser</span>
       <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>Save to your computer</span>
@@ -203,6 +204,11 @@
       <div class="card-top"><div class="ico i-net"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M10.8 7.2 6.3 15.8M13.2 7.2l4.5 8.6M7.5 18h9"/></svg></div><div><h3><a class="stretch" href="/apps/netsim/">Network Simulator</a></h3><div class="sub">FoCT NetSim &middot; Ethernet, ARP, IP, ICMP</div></div></div>
       <p>Build networks with PCs, switches and routers, configure IP addressing and routing, and watch packets move.</p>
       <div class="foot"><span class="tech">built for FoCT</span><span class="chip" data-need="none">Ready</span></div>
+    </div>
+    <div class="card">
+      <div class="card-top"><div class="ico i-pkt"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M3 5h18M3 10h18M3 15h9M3 20h7"/><circle cx="17.5" cy="17" r="3.2"/><path d="m19.8 19.3 2.2 2.2"/></svg></div><div><h3><a class="stretch" href="/apps/packets/">Packet Analyzer</a></h3><div class="sub">Wireshark 4.6 engine &middot; pcap, pcapng</div></div></div>
+      <p>Open network captures, filter them with Wireshark display filters, look inside every protocol layer and follow TCP streams.</p>
+      <div class="foot"><span class="tech">Wireshark in WebAssembly</span><span class="chip" data-need="wasm">Ready</span></div>
     </div>
     <div class="card">
       <div class="card-top"><div class="ico i-office"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></div><div><h3><a class="stretch" href="/apps/office/">Office Suite</a></h3><div class="sub">Documents &middot; Spreadsheets &middot; Presentations</div></div></div>

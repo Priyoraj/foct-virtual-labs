@@ -438,7 +438,7 @@ function handleIp(dev, iface, p) {
 function icmpError(dev, iface, orig, ic) {
   if (orig.data.type !== "echo-request") return; // never answer an error with an error
   const src = iface.ipInt;
-  sendIp(dev, ipPacket(src, orig.src, "ICMP", { ...ic, about: { id: orig.data.id, seq: orig.data.seq } }));
+  sendIp(dev, ipPacket(src, orig.src, "ICMP", { ...ic, about: { id: orig.data.id, seq: orig.data.seq, src: orig.src, dst: orig.dst, ttl: orig.ttl } }));
 }
 
 // ------------------------------------------------------------------ ping / traceroute processes

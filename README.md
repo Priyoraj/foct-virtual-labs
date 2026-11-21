@@ -20,7 +20,8 @@ Students open one address on the lab network and get:
 | **LTspice** | ❌ → SPICE substitute | LTspice is a Windows desktop program and cannot run in a browser. Instead, *SPICE Simulator*: **ngspice 45** compiled to WebAssembly ([EEcircuit-engine](https://github.com/eelab-dev/EEcircuit-engine)) with uPlot waveforms: `.tran`, `.ac` (Bode), `.dc`, `.op`. Netlists exported from LTspice (*View → SPICE Netlist*) are adjusted automatically (`SINE`, `Rser=`, one-value `.tran`, `.backanno`, library includes), and common parts (1N4148, 1N4007, Zeners, 2N2222, 2N3904, BC547, 2N7000, uA741, LM358, TL081, LTspice's 3-pin `opamp`) are built in. Not supported: `.asc` schematics and `.step`. |
 | **Circuit simulator** | ✅ Full | [Falstad CircuitJS](https://www.falstad.com/circuit/) (3.4 MB): draw schematics and watch current flow live, analog and digital, ~380 example circuits; offline, its service worker and Dropbox import disabled. |
 | **Diagrams (draw.io)** | ✅ Full | Self-hosted draw.io 32.7, offline, cloud storage disabled; saves/exports to the student's PC. |
-| **Network simulation** | ✅ Built for FoCT | *FoCT NetSim*: PCs, laptops, servers, hubs, switches, routers; IPv4/masks/gateways/static routes; Ethernet MAC learning, ARP, ICMP `ping`/`tracert`, TTL, unreachable messages; animated packets, step mode and header inspector; example networks and a troubleshooting exercise. (Packet Tracer and GNS3 cannot run in a browser.) |
+| **Network simulation** | ✅ Built for FoCT | *FoCT NetSim*: PCs, laptops, servers, hubs, switches, routers; IPv4/masks/gateways/static routes; Ethernet MAC learning, ARP, ICMP `ping`/`tracert`, TTL, unreachable messages; animated packets, step mode and header inspector; example networks and a troubleshooting exercise; the packets saved as a `.pcap` file for the Packet Analyzer. (Packet Tracer and GNS3 cannot run in a browser.) |
+| **Wireshark** | ✅ Analysis (no live capture) | *Packet Analyzer*: **Wireshark 4.6's own dissectors** compiled to WebAssembly ([Wiregasm](https://github.com/good-tools/wiregasm), 20 MB compressed, in a worker). Opens `.pcap`/`.pcapng` captures and shows them as Wireshark does: display filters checked and completed as you type, packet list with Wireshark's colours, protocol tree linked to the bytes, TCP reassembly and expert notes, *Follow stream* (TCP, UDP, HTTP), conversations, endpoints and HTTP objects, and *Save shown packets* as a new capture. Six example captures with questions (ARP and ping, DNS and HTTP, a TCP retransmission, DHCP, an FTP password in clear text, TLS 1.3), made by `tools/make_captures.py`. A browser cannot capture live traffic: that needs Wireshark on the PC. Captures come from files, the examples, or the Network Simulator. |
 | **Office suite** | ✅ (heavier) | ONLYOFFICE editors compiled for the browser ([ranuts/document](https://github.com/ranuts/document)): Word/Excel/PowerPoint `.docx/.xlsx/.pptx`, save as PDF. English UI, open fonts metric-compatible with Arial, Times New Roman, Courier New, Calibri and Cambria. Works in Edge, Chrome and Firefox. New files use Calibri, and new documents are A4 with 2.54 cm margins; the original build swapped Calibri for the Chinese font DengXian, which Windows outside China lacks. The original build reported every document opened to 360's servers (which editor, the file type, load times and a browser ID; not the contents or file names) and fetched missing fonts from there; setup switches both off, so Office talks only to the lab server. Needs 4 GB+ RAM on the PC. |
 
 **Student files are never stored on the server.** Every app saves to and opens from the
@@ -47,7 +48,7 @@ limit, not the server.
 ## Requirements
 
 * **Server:** any Windows/Linux/macOS PC on the lab network with **Python 3.8+**. The lab itself
-  (`web/`) takes about 1.1 GB. Internet is needed **once** for `tools/setup.py` (about 860 MB of
+  (`web/`) takes about 1.2 GB. Internet is needed **once** for `tools/setup.py` (about 900 MB of
   downloads, cached in `.downloads/` and `.build/`, about 1 GB; delete those two folders after
   setup if disk space is short). Afterwards the lab runs fully offline.
 * **Student PCs:** a current **Chrome or Edge**, or **Firefox** (see [Firefox](#firefox)). 4 GB
@@ -414,12 +415,15 @@ submissions/               the students' exam work, one folder per exam   (creat
 tools/setup.py             downloads and patches all third-party runtimes into web/
 tools/javasdk.py           repairs the TeaVM javac class library (TeaVM @Rename/@Remove)
 tools/make_brand.py        cuts the ADtU logo into web assets
+tools/make_captures.py     makes the Packet Analyzer's example captures
 tools/jupyterlite/         JupyterLite config and starter notebook
 tools/office/              blank Word/Excel/PowerPoint templates
 web/index.html, help.html  portal and help
 web/assets/js/exam.js      exam mode in every page (clipboard block, watermark, sign-in, sending work)
 web/apps/code/             C / C++ / Java / Python IDE (Monaco editor, workers, WASI runtime)
 web/apps/netsim/           FoCT NetSim network simulator
+web/apps/packets/          Packet Analyzer (Wireshark's dissectors in a worker; samples/ made by tools/make_captures.py)
+web/assets/js/pcap.js      writes pcap files (NetSim) and cuts packets out of pcap/pcapng files (Packet Analyzer)
 web/apps/sql/              SQL Lab (SQLite and PostgreSQL workers, sample databases)
 web/apps/spice/            SPICE simulator (ngspice worker, LTspice netlist adapter, model library)
 web/apps/mongo/            MongoDB Lab (engine worker: shell, indexes, validation, text search; samples)
@@ -429,7 +433,7 @@ web/apps/circuit/          Falstad CircuitJS        (generated)
 web/apps/notebook/         JupyterLite build        (generated)
 web/apps/drawio/           draw.io                  (generated)
 web/apps/office/           office suite             (generated)
-web/runtimes/              pyodide, clang, teavm, javabox, pywheels, sql, spice, mongo, lexyacc, viz (generated)
+web/runtimes/              pyodide, clang, teavm, javabox, pywheels, sql, spice, mongo, lexyacc, viz, wiregasm (generated)
 web/vendor/monaco/         code editor              (generated)
 ```
 
@@ -462,7 +466,7 @@ To move the lab to another server, copy the whole folder (after setup) — no in
 
 ## Licences
 
-FoCT Virtual Labs code (portal, IDE, NetSim, SQL and MongoDB labs, Lex & Yacc integration, Compiler Design Tools, SPICE front end, server, tools) was designed and developed by Mr. Priya Raj Chanda, Assistant Professor [CSE], for ADtU FoCT.
+FoCT Virtual Labs code (portal, IDE, NetSim, SQL and MongoDB labs, Lex & Yacc integration, Compiler Design Tools, SPICE front end, Packet Analyzer and its example captures, server, tools) was designed and developed by Mr. Priya Raj Chanda, Assistant Professor [CSE], for ADtU FoCT.
 It is released under the [MIT License](LICENSE). The MIT License covers this code only.
 
 Third-party components keep their licences: Pyodide (MPL-2.0), JupyterLite/JupyterLab
@@ -470,7 +474,8 @@ Third-party components keep their licences: Pyodide (MPL-2.0), JupyterLite/Jupyt
 OpenJDK (GPL-2.0 with Classpath Exception), TeaVM (Apache-2.0), Monaco (MIT), draw.io (Apache-2.0),
 sql.js (MIT), SQLite (public domain), mingo (MIT), acorn (MIT), flex (BSD), Berkeley yacc (public domain),
 Graphviz (EPL) via viz.js (MIT), PGlite (Apache-2.0 / PostgreSQL Licence), ngspice (BSD-3-Clause
-and others), EEcircuit-engine (MIT), uPlot (MIT), CircuitJS (GPL-2.0),
+and others), EEcircuit-engine (MIT), uPlot (MIT), CircuitJS (GPL-2.0), Wireshark compiled to
+WebAssembly by Wiregasm (GPL-2.0-or-later; Wireshark is a registered trademark of the Wireshark Foundation),
 ranuts/document and ONLYOFFICE (AGPL-3.0; the modifications are the scripted patches in
 `tools/setup.py`, and the upstream sources are linked from the Help page), Liberation/Carlito/
 Caladea fonts (SIL OFL 1.1). These components are not stored in this repository: `tools/setup.py`

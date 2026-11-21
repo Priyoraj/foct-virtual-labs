@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Packet Analyzer &middot; FoCT Virtual Labs</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png">
+<link rel="stylesheet" href="/assets/css/foct.css">
+<link rel="stylesheet" href="packets.css">
+<script type="module" src="/assets/js/foct.js"></script>
+</head>
+<body>
+<header class="foct-bar">
+  <a class="foct-home" href="/" title="Back to FoCT Virtual Labs">
+    <img src="/assets/brand/adtu-seal.png" alt="ADtU seal">
+    <span><span class="t1">FoCT Virtual Labs</span><span class="t2">Assam down town University</span></span>
+  </a>
+  <span class="foct-crumb">/</span>
+  <span class="foct-app-title">Packet Analyzer</span>
+  <div class="tb">
+    <button class="btn btn-ghost" id="btnOpen" title="Open a capture file (.pcap, .pcapng) from this computer (Ctrl+O)">Open</button>
+    <div class="menu-wrap">
+      <button class="btn btn-ghost" id="btnMore" aria-haspopup="true">Examples &amp; more &#9662;</button>
+      <div class="menu" id="menuMore" hidden>
+        <div class="menu-label">Example captures</div>
+        <div id="sampleMenu"></div>
+        <hr>
+        <button data-cmd="help">How to use the analyzer</button>
+        <button data-cmd="theme">Switch light / dark</button>
+      </div>
+    </div>
+    <div class="menu-wrap">
+      <button class="btn btn-ghost" id="btnStats" aria-haspopup="true" disabled>Statistics &#9662;</button>
+      <div class="menu" id="menuStats" hidden>
+        <button data-cmd="summary">Capture summary</button>
+        <button data-cmd="conv">Conversations</button>
+        <button data-cmd="endpt">Endpoints</button>
+        <button data-cmd="objects">HTTP objects (files in web pages)</button>
+      </div>
+    </div>
+    <button class="btn btn-ghost" id="btnFollow" disabled title="Show the whole conversation of the selected packet's TCP, UDP or HTTP stream">Follow stream</button>
+    <button class="btn btn-ghost" id="btnSave" disabled title="Save the packets shown now as a new capture file (Ctrl+S)">Save shown packets</button>
+  </div>
+  <span class="spacer"></span>
+  <span class="chip busy" id="engine" title="Wireshark's protocol dissectors, compiled to WebAssembly"><span class="dot"></span>Loading Wireshark&hellip;</span>
+</header>
+
+<div class="fbar">
+  <label class="fl" for="filter">Display filter</label>
+  <div class="fwrap">
+    <input id="filter" spellcheck="false" autocomplete="off" placeholder="e.g.  http.request   or   ip.addr == 10.20.1.5 &amp;&amp; tcp.port == 80" aria-label="Display filter">
+    <div class="suggest" id="suggest" role="listbox" hidden></div>
+  </div>
+  <button class="btn btn-sm btn-primary" id="btnApply" title="Apply the filter (Enter)">Apply</button>
+  <button class="btn btn-sm" id="btnClear" title="Show all packets">Clear</button>
+  <div class="quick" id="quick" aria-label="Quick filters"></div>
+</div>
+
+<div class="pa">
+  <main class="panes" id="panes">
+    <section class="plist" id="plist">
+      <div class="phead" id="phead"></div>
+      <div class="pbody" id="pbody" tabindex="0" role="grid" aria-label="Packets">
+        <div class="pspacer" id="pspacer"></div>
+        <div class="prows" id="prows"></div>
+      </div>
+      <div class="empty" id="empty">
+        <h2>Open a capture</h2>
+        <p>Open a <b>.pcap</b> or <b>.pcapng</b> file (or drop it here), or start with an example below. The packets are dissected by Wireshark's own engine, inside this browser: nothing is uploaded.</p>
+        <div class="cards" id="sampleCards"></div>
+      </div>
+    </section>
+    <div class="split" id="split1" title="Drag to resize"></div>
+    <section class="pdetail" id="pdetail" aria-label="Packet details"><div class="none">Select a packet to see its protocol layers.</div></section>
+    <div class="split" id="split2" title="Drag to resize"></div>
+    <section class="pbytes" id="pbytes" aria-label="Packet bytes"><div class="none">The packet's bytes appear here.</div></section>
+  </main>
+  <aside class="exercise" id="exercise" hidden></aside>
+</div>
+
+<footer class="sbar" id="sbar">
+  <span id="sFile">No capture open</span>
+  <span id="sCount"></span>
+  <span class="spacer"></span>
+  <span id="sEngine">Wireshark (Wiregasm) in WebAssembly</span>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -10,7 +10,7 @@ internet access afterwards.
     python tools/setup.py --only clang,teavm
     python tools/setup.py --list
 
-Needs internet once (about 860 MB of downloads). Re-running is safe: finished
+Needs internet once (about 900 MB of downloads). Re-running is safe: finished
 components are skipped, and downloads are cached in ./.downloads.
 """
 import argparse
@@ -54,6 +54,10 @@ CIRCUITJS_VERSION = "5.0.5ts"
 MINGO_VERSION = "7.2.7"
 ACORN_VERSION = "8.19.0"
 VIZ_VERSION = "3.31.0"
+# Wireshark 4.6's packet dissection compiled to WebAssembly (Wiregasm, GPL-2.0-or-later) for the
+# Packet Analyzer lab, pinned by the npm registry's SHA-512.
+WIREGASM_VERSION = "2.0.0"
+WIREGASM_SHA512 = "pAt6nckRGu8A1EDO0c0n6sXDtIZGLAWDdeeKiQDwtFxOP1RvKmyNE3okFKJkC9ex0/x2afuvYYMGWJCxepku/w=="
 # lex and yacc for the Lex & Yacc lab: their C sources, compiled in each browser on first use.
 # flex 2.5.4a is the last flex that does not run m4 as a separate program (a browser cannot start
 # programs); Berkeley yacc (byacc) is POSIX yacc. Archives are pinned by SHA-256.
@@ -479,6 +483,34 @@ def setup_viz():
         safe_extract_tar(tf, dest, strip="package/dist/", only=["viz.js"])
         safe_extract_tar(tf, dest, strip="package/", only=["README.md"])
     mark_done(dest, VIZ_VERSION)
+
+
+def setup_wiregasm():
+    """Wireshark's dissectors compiled to WebAssembly (Wiregasm) for the Packet Analyzer lab."""
+    dest = WEB / "runtimes" / "wiregasm"
+    version = f"wiregasm-{WIREGASM_VERSION}+esm2"
+    if is_done(dest, version):
+        return log("  already installed")
+    arc = npm_tarball("@goodtools/wiregasm", WIREGASM_VERSION)
+    got = base64.b64encode(hashlib.sha512(arc.read_bytes()).digest()).decode()
+    if got != WIREGASM_SHA512:
+        arc.unlink()
+        raise RuntimeError(f"{arc.name}: checksum mismatch; run setup again")
+    fresh_dir(dest)
+    with tarfile.open(arc, "r:gz") as tf:
+        safe_extract_tar(tf, dest, strip="package/dist/", only=["module.js", "wiregasm.js", "wiregasm.wasm", "wiregasm.data"])
+        safe_extract_tar(tf, dest, strip="package/", only=["LICENSE", "README.md"])
+    for m in dest.glob("*.map"):
+        m.unlink()
+    # The Emscripten loader is a classic script; the lab runs it in a module worker, so add an ES export.
+    loader = (dest / "wiregasm.js").read_bytes()
+    (dest / "wiregasm.mjs").write_bytes(loader + b"\nexport default loadWiregasm;\n")
+    (dest / "wiregasm.js").unlink()
+    (dest / "manifest.json").write_text(json.dumps({
+        "version": WIREGASM_VERSION, "wireshark": "4.6",
+        "sizes": {p.name: p.stat().st_size for p in dest.iterdir() if p.suffix in (".wasm", ".data")},
+    }, indent=1), encoding="utf-8")
+    mark_done(dest, version)
 
 
 CIRCUIT_SW_KILL = """// FoCT Virtual Labs: CircuitJS is served by the lab server, so its offline service worker is
@@ -929,6 +961,7 @@ STEPS = {
     "mongo": ("MongoDB lab engine (mingo)", setup_mongo),
     "lexyacc": ("lex and yacc sources for the Lex & Yacc lab", setup_lexyacc),
     "viz": ("Graphviz for diagrams in the compiler design tools", setup_viz),
+    "wiregasm": ("Wireshark packet dissection for the Packet Analyzer (Wiregasm)", setup_wiregasm),
     "spice": ("SPICE circuit simulator (ngspice)", setup_spice),
     "circuit": ("Circuit simulator (Falstad CircuitJS)", setup_circuit),
     "drawio": ("Diagrams (draw.io)", setup_drawio),

@@ -49,18 +49,18 @@ ENROL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9/._ \-]{1,39}")
 
 LABS = {"c": "C", "cpp": "C++", "java": "Java", "python": "Python IDE", "jupyter": "Jupyter", "lex": "Lex & Yacc",
         "cdtools": "Compiler tools", "sql": "SQL", "mongo": "MongoDB", "spice": "SPICE", "circuit": "Circuit simulator",
-        "netsim": "Network simulator", "drawio": "Diagrams", "office": "Office"}
+        "netsim": "Network simulator", "packets": "Packet analyzer", "drawio": "Diagrams", "office": "Office"}
 CODE_LABS = {"c", "cpp", "java", "python", "lex"}
 NEEDS = [   # URL prefix -> the labs that use it (first match wins)
     ("/apps/code/", CODE_LABS), ("/apps/notebook/", {"jupyter"}), ("/apps/sql/", {"sql"}), ("/apps/mongo/", {"mongo"}),
     ("/apps/cdtools/", {"cdtools"}), ("/apps/spice/", {"spice"}), ("/apps/circuit/", {"circuit"}),
-    ("/apps/netsim/", {"netsim"}), ("/apps/drawio/", {"drawio"}), ("/apps/office/", {"office"}),
+    ("/apps/netsim/", {"netsim"}), ("/apps/packets/", {"packets"}), ("/apps/drawio/", {"drawio"}), ("/apps/office/", {"office"}),
     ("/vendor/monaco/", CODE_LABS | {"sql", "mongo", "spice"}),
     ("/runtimes/clang/", {"c", "cpp", "lex"}), ("/runtimes/lexyacc/", {"lex"}),
     ("/runtimes/teavm/", {"java"}), ("/runtimes/javabox/", {"java"}),
     ("/runtimes/pyodide/", {"python", "jupyter"}), ("/runtimes/pywheels/", {"python", "jupyter"}),
     ("/runtimes/sql/", {"sql"}), ("/runtimes/mongo/", {"mongo"}), ("/runtimes/viz/", {"cdtools"}),
-    ("/runtimes/spice/", {"spice"}),
+    ("/runtimes/spice/", {"spice"}), ("/runtimes/wiregasm/", {"packets"}),
 ]
 AGENT_STALE = 20                       # seconds without a beat before a PC's exam helper counts as stopped
 # Programs the exam helper closes (and keeps closed) on the student's PC. The teacher can change the list.

@@ -48,6 +48,7 @@ MIME = {
     ".zip": "application/zip", ".whl": "application/zip", ".tar": "application/x-tar",
     ".gz": "application/gzip", ".bin": "application/octet-stream", ".data": "application/octet-stream",
     ".pdf": "application/pdf", ".ipynb": "application/json; charset=utf-8",
+    ".pcap": "application/vnd.tcpdump.pcap", ".pcapng": "application/octet-stream",
     ".py": "text/x-python; charset=utf-8", ".c": "text/plain; charset=utf-8",
     ".cpp": "text/plain; charset=utf-8", ".h": "text/plain; charset=utf-8",
     ".java": "text/plain; charset=utf-8", ".crt": "application/x-x509-ca-cert",
