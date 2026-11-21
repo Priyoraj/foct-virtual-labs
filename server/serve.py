@@ -110,6 +110,8 @@ EXAM_FILE = Path(__file__).resolve().parent / "exam-state.json"
 EXAM_CONTROL = Path(__file__).resolve().parent / "exam-control.html"
 EXAM_MERGE = Path(__file__).resolve().parent / "exam-merge.html"
 EXAM_HELPER = Path(__file__).resolve().parent / "exam-helper.vbs"
+# FoCT's changes to the third-party parts (the GPL and AGPL source offer), served by the lab itself.
+SETUP_SCRIPT = ROOT / "tools" / "setup.py"
 SUBMISSIONS = ROOT / "submissions"
 # Merging the zips of several lab servers and the similarity check (similarity.py): uploads and
 # results of each run in submissions/.merge/<job>/, the merged exam in submissions/<title> (merged)/.
@@ -221,6 +223,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_simple(200, body, "application/json; charset=utf-8", head=head)
         if path == "/exam-helper.vbs":
             return self.send_helper(head, url.query)
+        if path == "/source/setup.py":
+            try:
+                text = SETUP_SCRIPT.read_text(encoding="utf-8")
+            except OSError:
+                return self.send_simple(404, "Not found", head=head, page=True)
+            return self.send_simple(200, text, "text/plain; charset=utf-8", head=head)
         if path == "/__exam":
             token = self.headers.get("X-FoCT-Token")
             you = EXAM.seen(token, self.client_address[0])
